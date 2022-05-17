@@ -1,6 +1,8 @@
 homepage: "https://www.piano.io"
 documentation: "https://developers.atinternet-solutions.com/piano-analytics/"
 versions:
+  - sha: 15534de1ca8f25da0ce21e9a821f441e3a758a09
+    changeNotes: Add set privacy mode action
   - sha: c13ead32c8498d97479b6223fc0a04fa1e183892
     changeNotes: Add documentation in Readme
   - sha: 024a75fca8cd4ec7a49fc408eb92dfde7061c2c1
