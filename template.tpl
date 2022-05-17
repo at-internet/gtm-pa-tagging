@@ -53,6 +53,10 @@ ___TEMPLATE_PARAMETERS___
         "displayValue": "Set a user"
       },
       {
+        "value": "setPrivacyMode",
+        "displayValue": "Set Privacy mode"
+      },
+      {
         "value": "setVisitorId",
         "displayValue": "Override the visitor ID (not recommended)"
       }
@@ -129,6 +133,27 @@ ___TEMPLATE_PARAMETERS___
       {
         "paramName": "commandChoice",
         "paramValue": "setUser",
+        "type": "EQUALS"
+      }
+    ]
+  },
+  {
+    "type": "GROUP",
+    "name": "setPrivacyGroup",
+    "displayName": "",
+    "groupStyle": "NO_ZIPPY",
+    "subParams": [
+      {
+        "type": "TEXT",
+        "name": "privacyMode",
+        "displayName": "Privacy Mode",
+        "simpleValueType": true
+      }
+    ],
+    "enablingConditions": [
+      {
+        "paramName": "commandChoice",
+        "paramValue": "setPrivacyMode",
         "type": "EQUALS"
       }
     ]
@@ -218,6 +243,12 @@ const pixel = {
       const visitorId = data.visitorId || "";
       log('GTM Piano Analytics Tag Template - Set visitor - ', visitorId);
       if (visitorId !== "") _paq.push(['setVisitorId', visitorId]); 
+    }
+    
+    if(commandChoice == "setPrivacyMode") {
+      const privacyMode = data.privacyMode || "";
+      log('GTM Piano Analytics Tag Template - Set privacy mode - ', privacyMode);
+      if (privacyMode !== "") _paq.push(['privacy.setMode', privacyMode]);
     }
     
   }

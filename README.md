@@ -52,6 +52,14 @@ You can user this action to identify a logged in user.
 
 ![Set a user](res/set-a-user.png)
 
+#### Set a Privacy mode
+
+[Documentation](https://developers.atinternet-solutions.com/piano-analytics/data-collection/how-to-send-events/privacy#set-a-privacy-mode)
+
+You can set a new Privacy mode if the end-user changes its preferences.
+
+![Set privacy mode](res/set-privacy-mode.png)
+
 #### Override the Visitor ID (not recommended)
 
 [Documentation](https://developers.atinternet-solutions.com/piano-analytics/data-collection/how-to-send-events/visitor-identification#visitor-identification-management)
