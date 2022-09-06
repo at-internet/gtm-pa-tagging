@@ -1,6 +1,8 @@
 homepage: "https://www.piano.io"
 documentation: "https://developers.atinternet-solutions.com/piano-analytics/"
 versions:
+  - sha: 97b1fa2737f50c4574d77516ad2753ff159c8d6c
+    changeNotes: Add success notification
   - sha: 15534de1ca8f25da0ce21e9a821f441e3a758a09
     changeNotes: Add set privacy mode action
   - sha: c13ead32c8498d97479b6223fc0a04fa1e183892
