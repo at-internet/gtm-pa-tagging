@@ -250,7 +250,8 @@ const pixel = {
       log('GTM Piano Analytics Tag Template - Set privacy mode - ', privacyMode);
       if (privacyMode !== "") _paq.push(['privacy.setMode', privacyMode]);
     }
-    
+
+    data.gtmOnSuccess();    
   }
 };
 
