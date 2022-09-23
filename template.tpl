@@ -209,6 +209,7 @@ const copyFromWindow = require('copyFromWindow');
 const setInWindow = require('setInWindow');
 const makeTableMap = require('makeTableMap');
 const log = require('logToConsole');
+const createQueue = require('createQueue');
 
 log('GTM Piano Analytics Tag Template - Data =', data);
 
@@ -216,19 +217,19 @@ const confObject = data.configuration;
 
 let _pac = copyFromWindow('_pac') || {privacy: []};
 for (var conf in confObject) { _pac[conf] = confObject[conf]; }
+let queueVarName = _pac.queueVarName || "_paq";
 setInWindow('_pac', _pac, true);
 
 const pixel = {
   init: () => {
-    let _paq = copyFromWindow('_paq') || {};
-
+    const dataLayerPush = createQueue(queueVarName);
     const commandChoice = data.commandChoice;
 
     if(commandChoice == "sendEvent") {
       const eventName = data.eventName || "";
       const eventData = makeTableMap(data.eventProps, 'propKey', 'propValue') || {};
       log('GTM Piano Analytics Tag Template - Send event - ', eventName, eventData);
-      if(eventName !== "") _paq.push(['sendEvent', eventName, eventData]);
+      if(eventName !== "") dataLayerPush(['sendEvent', eventName, eventData]);
     }
 
     if(commandChoice == "setUser") {
@@ -236,21 +237,21 @@ const pixel = {
       const userCategory = data.userCategory || "";
       const storeUser = data.storeUser || true;
       log('GTM Piano Analytics Tag Template - Set user - ', userId, userCategory, storeUser);
-      if (userId !== "") _paq.push(['setUser', userId, userCategory, storeUser]); 
+      if (userId !== "") dataLayerPush(['setUser', userId, userCategory, storeUser]); 
     }
 
     if(commandChoice == "setVisitorId") {
       const visitorId = data.visitorId || "";
       log('GTM Piano Analytics Tag Template - Set visitor - ', visitorId);
-      if (visitorId !== "") _paq.push(['setVisitorId', visitorId]); 
+      if (visitorId !== "") dataLayerPush(['setVisitorId', visitorId]); 
     }
     
     if(commandChoice == "setPrivacyMode") {
       const privacyMode = data.privacyMode || "";
       log('GTM Piano Analytics Tag Template - Set privacy mode - ', privacyMode);
-      if (privacyMode !== "") _paq.push(['privacy.setMode', privacyMode]);
+      if (privacyMode !== "") dataLayerPush(['privacy.setMode', privacyMode]);
     }
-
+    
     data.gtmOnSuccess();    
   }
 };
@@ -414,6 +415,45 @@ ___WEB_PERMISSIONS___
                   {
                     "type": 1,
                     "string": "_paq"
+                  },
+                  {
+                    "type": 8,
+                    "boolean": true
+                  },
+                  {
+                    "type": 8,
+                    "boolean": true
+                  },
+                  {
+                    "type": 8,
+                    "boolean": true
+                  }
+                ]
+              },
+              {
+                "type": 3,
+                "mapKey": [
+                  {
+                    "type": 1,
+                    "string": "key"
+                  },
+                  {
+                    "type": 1,
+                    "string": "read"
+                  },
+                  {
+                    "type": 1,
+                    "string": "write"
+                  },
+                  {
+                    "type": 1,
+                    "string": "execute"
+                  }
+                ],
+                "mapValue": [
+                  {
+                    "type": 1,
+                    "string": "_paqueue"
                   },
                   {
                     "type": 8,
