@@ -44,6 +44,12 @@ Fill the *Event name* and all the properties needed.
 
 ![Tag configuration](res/tag-configuration.png)
 
+#### Send multiple events
+
+[Documentation](https://developers.atinternet-solutions.com/piano-analytics/data-collection/how-to-send-events/send-events-via-sdks)
+
+For each event t be sent, fill the *Event name* and give a variable with an object of properties to be sent.
+
 #### Set a user
 
 [Documentation](https://developers.atinternet-solutions.com/piano-analytics/data-collection/how-to-send-events/users)

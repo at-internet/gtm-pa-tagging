@@ -49,6 +49,10 @@ ___TEMPLATE_PARAMETERS___
         "displayValue": "Send an event"
       },
       {
+        "value": "sendEvents",
+        "displayValue": "Send multiple events"
+      },
+      {
         "value": "setUser",
         "displayValue": "Set a user"
       },
@@ -99,6 +103,40 @@ ___TEMPLATE_PARAMETERS___
       {
         "paramName": "commandChoice",
         "paramValue": "sendEvent",
+        "type": "EQUALS"
+      }
+    ]
+  },
+  {
+    "type": "GROUP",
+    "name": "sendEventsGroup",
+    "displayName": "",
+    "groupStyle": "NO_ZIPPY",
+    "subParams": [
+      {
+        "type": "SIMPLE_TABLE",
+        "name": "multipleEventsTable",
+        "displayName": "Events",
+        "simpleTableColumns": [
+          {
+            "defaultValue": "",
+            "displayName": "Event name",
+            "name": "multipleEventsName",
+            "type": "TEXT"
+          },
+          {
+            "defaultValue": "",
+            "displayName": "Event properties object",
+            "name": "multipleEventsProps",
+            "type": "TEXT"
+          }
+        ]
+      }
+    ],
+    "enablingConditions": [
+      {
+        "paramName": "commandChoice",
+        "paramValue": "sendEvents",
         "type": "EQUALS"
       }
     ]
@@ -187,28 +225,9 @@ ___JS_TEMPLATE___
 const injectScript = require('injectScript');
 const copyFromWindow = require('copyFromWindow');
 const setInWindow = require('setInWindow');
-const callLater = require('callLater');
 const makeTableMap = require('makeTableMap');
 const log = require('logToConsole');
-
-log('GTM Piano Analytics Tag Template - Data =', data);
-
-const pixel = {
-  init: () => {
-    log('GTM Piano Analytics Tag Template - Init');
-  }
-}
-
-injectScript("https://tag.aticdn.net/piano-analytics.js", pixel.init, data.gtmOnFailure, 'pixelPA');
-
-
-___SANDBOXED_JS_FOR_WEB_TEMPLATE___
-
-const injectScript = require('injectScript');
-const copyFromWindow = require('copyFromWindow');
-const setInWindow = require('setInWindow');
-const makeTableMap = require('makeTableMap');
-const log = require('logToConsole');
+const JSON = require('JSON');
 const createQueue = require('createQueue');
 
 log('GTM Piano Analytics Tag Template - Data =', data);
@@ -232,6 +251,17 @@ const pixel = {
       if(eventName !== "") dataLayerPush(['sendEvent', eventName, eventData]);
     }
 
+    if(commandChoice == "sendEvents") {
+      const events = data.multipleEventsTable || [];
+      const finalEvents = events.map(function(event) {
+        let eventProps = event.multipleEventsProps;
+        if(typeof event.multipleEventsProps !== "object") eventProps = JSON.parse(eventProps);
+        return {"name":event.multipleEventsName, "data":eventProps};
+      });
+      log('GTM Piano Analytics Tag Template - Send events - ', finalEvents);
+      if(finalEvents !== []) dataLayerPush(['sendEvents', finalEvents]);
+    }
+
     if(commandChoice == "setUser") {
       const userId = data.userId || "";
       const userCategory = data.userCategory || "";
@@ -245,7 +275,7 @@ const pixel = {
       log('GTM Piano Analytics Tag Template - Set visitor - ', visitorId);
       if (visitorId !== "") dataLayerPush(['setVisitorId', visitorId]); 
     }
-    
+
     if(commandChoice == "setPrivacyMode") {
       const privacyMode = data.privacyMode || "";
       log('GTM Piano Analytics Tag Template - Set privacy mode - ', privacyMode);
