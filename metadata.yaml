@@ -1,6 +1,8 @@
 homepage: "https://www.piano.io"
 documentation: "https://developers.atinternet-solutions.com/piano-analytics/"
 versions:
+  - sha: d33ebc65cc5714ad4e46ddc0914c8ce9432c6ebe
+    changeNotes: Add multiple events sending
   - sha: cfe0a7b547ab6d73dac5e66fc8151733352c10dc
     changeNotes: Add queueVarName config management
   - sha: 97b1fa2737f50c4574d77516ad2753ff159c8d6c
