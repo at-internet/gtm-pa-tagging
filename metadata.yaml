@@ -1,6 +1,13 @@
 homepage: "https://www.piano.io"
 documentation: "https://developers.atinternet-solutions.com/piano-analytics/"
 versions:
+  - sha: cc7ac23c628845fc9ee55ff8c9a678a11e6ca455
+    changeNotes: |2
+      Add setProperties command
+      Add sendEvents command
+      Add setConsent command
+      Add auto GA eCommerce bridge
+      Allow configurable SDK src
   - sha: cfe0a7b547ab6d73dac5e66fc8151733352c10dc
     changeNotes: Add queueVarName config management
   - sha: 97b1fa2737f50c4574d77516ad2753ff159c8d6c
