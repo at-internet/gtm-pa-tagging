@@ -384,9 +384,20 @@ function merge(a, b) {
   for (var key in b) { a[key] = b[key]; }
 }
 
-function propTypeCast(val, force) {
-  if (force) return val;
-  return JSON.parse(JSON.stringify(val));
+function propTypeCast(data, force) {
+  if (force) return data;
+  var testNumber = makeNumber(data);
+  var isNaN = (testNumber !== testNumber);
+  if (
+    data == 'true' ||
+    data == 'false' ||
+    !isNaN ||
+    (data.indexOf('[') == 0 && data.slice(-1) == ']') ||
+    (data.indexOf('{') == 0 && data.slice(-1) == '}')
+  ) {
+    return JSON.parse(data);
+  }
+  return JSON.parse("\"" + data + "\"");
 }
 
 function propPrefix(key, type) {

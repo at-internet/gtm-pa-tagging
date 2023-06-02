@@ -427,7 +427,7 @@ ___TEMPLATE_PARAMETERS___
           {
             "type": "LABEL",
             "name": "ecommerceDefaultPropsMapping",
-            "displayName": "transaction_id → transaction_id\u003cbr /\u003e\nvalue → cart_turnovertaxfree\u003cbr /\u003e\nvalue+tax → cart_turnovertaxincluded\u003cbr /\u003e\nshipping → shipping_costtaxincluded\u003cbr /\u003e\ncurrency+items.currency → cart_currency\u003cbr /\u003e\ncoupon → transaction_promocode\u003cbr /\u003e\nitems.item_id → product_id\u003cbr /\u003e\nitems.item_name → product\u003cbr /\u003e\nitems.coupon → product_discount\u003cbr /\u003e\nitems.discount → product_discount\u003cbr /\u003e\nitems.item_brand → product_brand\u003cbr /\u003e\nitems.item_category → product_category1\u003cbr /\u003e\nitems.item_category2 → product_category2\u003cbr /\u003e\nitems.item_category3 → product_category3\u003cbr /\u003e\nitems.item_category4 → product_category4\u003cbr /\u003e\nitems.item_variant → product_variant\u003cbr /\u003e\nitems.price → product_pricetaxfree\u003cbr /\u003e\nitems.quantity → product_quantity"
+            "displayName": "transaction_id → transaction_id\u003cbr /\u003e\nvalue → cart_turnovertaxfree\u003cbr /\u003e\nvalue--tax → cart_turnovertaxincluded\u003cbr /\u003e\nshipping → shipping_costtaxincluded\u003cbr /\u003e\ncurrency||items.currency → cart_currency\u003cbr /\u003e\ncoupon → transaction_promocode\u003cbr /\u003e\nitems.item_id → product_id\u003cbr /\u003e\nitems.item_name → product\u003cbr /\u003e\nitems.coupon → product_discount\u003cbr /\u003e\nitems.discount → product_discount\u003cbr /\u003e\nitems.item_brand → product_brand\u003cbr /\u003e\nitems.item_category → product_category1\u003cbr /\u003e\nitems.item_category2 → product_category2\u003cbr /\u003e\nitems.item_category3 → product_category3\u003cbr /\u003e\nitems.item_category4 → product_category4\u003cbr /\u003e\nitems.item_variant → product_variant\u003cbr /\u003e\nitems.price → product_pricetaxfree\u003cbr /\u003e\nitems.quantity → product_quantity"
           }
         ]
       },
@@ -495,6 +495,8 @@ const Object = require('Object');
 const createQueue = require('createQueue');
 const copyFromDataLayer = require('copyFromDataLayer');
 const makeInteger = require('makeInteger');
+const makeNumber = require('makeNumber');
+const makeString = require('makeString');
 
 const gtmId = copyFromDataLayer('gtm.uniqueEventId');
 const dataLayer = copyFromWindow('dataLayer');
@@ -510,7 +512,7 @@ setInWindow('_pac', _pac, true);
 const pdlObject = data.configuration.pdlObject || {};
 const windowPdl = copyFromWindow('pdl') || {};
 merge(windowPdl, pdlObject);
-if(windowPdl !== {}) setInWindow('pdl', windowPdl, true);
+if (windowPdl !== {}) setInWindow('pdl', windowPdl, true);
 
 const pixel = {
   init: () => {
@@ -552,11 +554,11 @@ const pixel = {
     if (commandChoice == "setProperties") {
       const setPropObject = {};
       const setPropOptions = {};
-      data.setPropTable && data.setPropTable.map(function(prop) {
+      data.setPropTable && data.setPropTable.map(function (prop) {
         setPropObject[propPrefix(prop.setPropKey, prop.setPropType)] = propTypeCast(prop.setPropValue, !(prop.setPropType === 'auto'));
       });
       setPropOptions.persistent = data.setPropPersistent;
-      setPropOptions.events = data.setPropEvents && data.setPropEvents.map(function(event) {
+      setPropOptions.events = data.setPropEvents && data.setPropEvents.map(function (event) {
         return event.setPropEvent;
       });
       log('GTM Piano Analytics Tag Template - Set properties - ', setPropObject, setPropOptions);
@@ -587,37 +589,37 @@ const pixel = {
       let itemPropsMapping = {};
       let ecomPropsMapping = {};
       let totalQuantity = 0;
-      
+
       if (customEventsMapping !== {}) {
         for (var eventMapping in customEventsMapping) { eventsMapping[eventMapping] = customEventsMapping[eventMapping]; }
       }
       if (customProductsMapping !== {}) {
         for (var productMapping in customProductsMapping) { productsMapping[productMapping] = customProductsMapping[productMapping]; }
       }
-      
+
       const mappedEventname = eventsMapping[data.ecomEventName] || false;
       if (!mappedEventname) return;
 
-      const ecommerceDatalayer = retrieveActualPush("key","ecommerce");
+      const ecommerceDatalayer = retrieveActualPush("key", "ecommerce");
 
       let ecomPropsWithoutItems = JSON.parse(JSON.stringify(ecommerceDatalayer));
       Object.delete(ecomPropsWithoutItems, "items");
 
       if (customPropsMapping !== {}) {
-        for (var propMapping in customPropsMapping) { 
-          if(propMapping.substring(0, 2) === '$$') {
+        for (var propMapping in customPropsMapping) {
+          if (propMapping.substring(0, 2) === '$$') {
             constantProps[customPropsMapping[propMapping]] = propMapping.substring(2);
           } else {
             propsMapping[propMapping] = customPropsMapping[propMapping];
           }
         }
       }
-      
+
       for (var prop in propsMapping) {
         if (prop.substring(0, 6) === "items.") itemPropsMapping[prop.slice(6)] = propsMapping[prop];
         else ecomPropsMapping[prop] = propsMapping[prop];
       }
-      
+
       if (ecommerceDatalayer.items) {
         // automatically calculate "cart_nbdistinctproduct" property
         if (ecommerceDatalayer.items.length > 0) ecomPropsWithoutItems.cart_nbdistinctproduct = ecommerceDatalayer.items.length;
@@ -627,7 +629,7 @@ const pixel = {
           let productEventname = "";
           // producing complementary products events
           for (var productEvent in productsMapping) {
-            if(mappedEventname === productEvent) productEventname = productsMapping[productEvent];
+            if (mappedEventname === productEvent) productEventname = productsMapping[productEvent];
           }
           // any "product.xxx" event should inherit from items props
           if (mappedEventname.substring(0, 8) === "product.") productEventname = mappedEventname;
@@ -637,12 +639,12 @@ const pixel = {
       }
       // automatically calculate "cart_quantity" property
       if (totalQuantity > 0) ecomPropsWithoutItems.cart_quantity = totalQuantity;
-      
+
       if (mappedEventname.substring(0, 8) !== "product.") finalEvents.push({ "name": mappedEventname, "data": mapProperties(ecomPropsWithoutItems, ecomPropsMapping, constantProps) });
 
-      for (let index = finalEvents.length-1; index >= 0; index--) {
+      for (let index = finalEvents.length - 1; index >= 0; index--) {
         const element = finalEvents[index];
-        
+
         // automatically add "cart_id" property if none defined
         if (!element.data.cart_id && ecommerceDatalayer.transaction_id) {
           element.data.cart_id = ecommerceDatalayer.transaction_id;
@@ -686,21 +688,49 @@ function mapProperties(input, mapping, constantProps) {
       let outputValue = output[key];
       switch (mapping[key]) {
         case "transaction_promocode":
-          if(getType(outputValue) !== "array") outputValue = outputValue.split(",");
+          if (getType(outputValue) !== "array") outputValue = outputValue.split(",");
           break;
 
         case "product_discount":
-          if(getType(outputValue) !== "boolean") outputValue = true;
+          if (getType(outputValue) !== "boolean") outputValue = true;
           break;
 
-          default:
+        case "transaction_id":
+        case "product_id":
+        case "cart_id":
+        case "product":
+        case "product_id":
+        case "product_brand":
+        case "product_category1":
+        case "product_category2":
+        case "product_category3":
+        case "product_category4":
+        case "product_variant":
+        case "cart_currency":
+          outputValue = makeString(outputValue) || outputValue;
           break;
-        }
+
+        case "product_pricetaxincluded":
+        case "product_pricetaxfree":
+        case "cart_turnovertaxincluded":
+        case "cart_turnovertaxfree":
+        case "shipping_costtaxincluded":
+        case "shipping_costtaxfree":
+        case "product_quantity":
+        case "cart_quantity":
+        case "cart_creation_utc":
+        case "cart_nbdistinctproduct":
+          outputValue = makeNumber(outputValue) || outputValue;
+          break;
+
+        default:
+          break;
+      }
 
       output[mapping[key]] = outputValue;
       Object.delete(output, key);
     }
-    if(constantProps !== {}) {
+    if (constantProps !== {}) {
       Object.keys(constantProps).forEach(function (key) {
         output[key] = constantProps[key];
       });
@@ -708,9 +738,32 @@ function mapProperties(input, mapping, constantProps) {
   });
   Object.keys(mapping).forEach(function (key) {
     if (key.indexOf("+") !== -1) {
-      const multipleProps = key.split("+");
-      if(input[multipleProps[0]] && input[multipleProps[1]]) {
-        output[mapping[key]] = input[multipleProps[0]] + input[multipleProps[1]];
+      let multipleProps;
+      if (key.indexOf("++") !== -1) {
+        multipleProps = key.split("++");
+      } else {
+        // needed for backward compatibility
+        multipleProps = key.split("+");
+      }
+      output[mapping[key]] = input[multipleProps[0]];
+      for (let i = 1; i < multipleProps.length; i++) {
+        output[mapping[key]] = output[mapping[key]] + input[multipleProps[i]];
+      }
+    }
+    if (key.indexOf("--") !== -1) {
+      const multipleProps = key.split("--");
+      output[mapping[key]] = input[multipleProps[0]];
+      for (let i = 1; i < multipleProps.length; i++) {
+        output[mapping[key]] = output[mapping[key]] - input[multipleProps[i]];
+      }
+    }
+    if (key.indexOf("||") !== -1) {
+      const multipleProps = key.split("||");
+      for (let i = 0; i < multipleProps.length; i++) {
+        if (input[multipleProps[i]]) {
+          output[mapping[key]] = input[multipleProps[i]];
+          break;
+        }
       }
     }
   });
@@ -736,9 +789,9 @@ const DEFAULT_ECOMMERCE_PRODUCTS_MAPPING = {
 const DEFAULT_ECOMMERCE_PROPS_MAPPING = {
   "transaction_id": "transaction_id",
   "value": "cart_turnovertaxfree",
-  "value+tax": "cart_turnovertaxincluded",
+  "value--tax": "cart_turnovertaxincluded",
   "shipping": "shipping_costtaxincluded",
-  "currency+items.currency": "cart_currency",
+  "currency||items.currency": "cart_currency",
   "coupon": "transaction_promocode",
   "items.item_id": "product_id",
   "items.item_name": "product",
@@ -775,7 +828,7 @@ function retrieveActualPush(type, value) {
   const get = (obj, path, def) => {
     path = path.split('.');
     let current = obj;
-    
+
     for (let i = 0; i < path.length; i++) {
       if (!current[path[i]]) return def;
       current = current[path[i]];
@@ -788,10 +841,10 @@ function retrieveActualPush(type, value) {
     let obj = dataLayer.map(o => {
       // If falsy (due to e.g. sandbox API suppressing the object), return empty object
       if (!o) return {};
-      
+
       // If a regular dataLayer object, return it
       if (o['gtm.uniqueEventId']) return o;
-  
+
       // Otherwise assume it's a template constructor-based object
       // Clone the object to remove constructor, then return first
       // property in the object (the wrapper)
@@ -799,9 +852,9 @@ function retrieveActualPush(type, value) {
       for (let prop in o) {
         return o[prop];
       }
-    // Filter to only include the item(s) where the event ID matches
+      // Filter to only include the item(s) where the event ID matches
     }).filter(o => !!o && o['gtm.uniqueEventId'] === gtmId);
-    
+
     // Get the first item from the matches
     obj = obj.length ? obj[0] : {};
     switch (dataType) {
@@ -817,9 +870,20 @@ function merge(a, b) {
   for (var key in b) { a[key] = b[key]; }
 }
 
-function propTypeCast(val, force) {
-  if(force) return val;
-  return JSON.parse(JSON.stringify(val));
+function propTypeCast(data, force) {
+  if (force) return data;
+  var testNumber = makeNumber(data);
+  var isNaN = (testNumber !== testNumber);
+  if (
+    data == 'true' ||
+    data == 'false' ||
+    !isNaN ||
+    (data.indexOf('[') == 0 && data.slice(-1) == ']') ||
+    (data.indexOf('{') == 0 && data.slice(-1) == '}')
+  ) {
+    return JSON.parse(data);
+  }
+  return JSON.parse("\"" + data + "\"");
 }
 
 function propPrefix(key, type) {
@@ -831,7 +895,7 @@ function propPrefix(key, type) {
     'boolean': 'b:',
     'array': 'a:',
   };
-  if(prefix[type]) return prefix[type] + '' + key;
+  if (prefix[type]) return prefix[type] + '' + key;
   return key;
 }
 
