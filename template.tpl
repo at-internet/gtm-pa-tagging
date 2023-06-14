@@ -528,7 +528,10 @@ const pixel = {
 
     if (commandChoice == "sendEvents") {
       const events = data.multipleEventsTable || [];
-      const finalEvents = events.map(function (event) {
+      const finalEvents = events.filter(function(event) {
+        if (event.multipleEventsName === undefined) return false;
+        return true;
+      }).map(function (event) {
         let eventProps = event.multipleEventsProps;
         if (typeof event.multipleEventsProps !== "object") eventProps = JSON.parse(eventProps);
         return { "name": event.multipleEventsName, "data": eventProps };
