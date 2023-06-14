@@ -1,6 +1,12 @@
 homepage: "https://www.piano.io"
 documentation: "https://developers.atinternet-solutions.com/piano-analytics/"
 versions:
+  - sha: a521f05701de925d01f1756e8364af58131e0170
+    changeNotes: |2
+      Force value type for known ecommerce properties
+      Improve ecommerce mapping capacities
+      Fix auto typing of setProperties method
+      Prevent empty events from crashing SDK (`sendEvents`)
   - sha: cc7ac23c628845fc9ee55ff8c9a678a11e6ca455
     changeNotes: |2
       Add setProperties command
