@@ -558,7 +558,7 @@ const pixel = {
       const setPropObject = {};
       const setPropOptions = {};
       data.setPropTable && data.setPropTable.map(function (prop) {
-        setPropObject[propPrefix(prop.setPropKey, prop.setPropType)] = propTypeCast(prop.setPropValue, !(prop.setPropType === 'auto'));
+        setPropObject[propPrefix(prop.setPropKey, prop.setPropType)] = propTypeCast(prop.setPropValue, (prop.setPropType === 'auto'));
       });
       setPropOptions.persistent = data.setPropPersistent;
       setPropOptions.events = data.setPropEvents && data.setPropEvents.map(function (event) {
