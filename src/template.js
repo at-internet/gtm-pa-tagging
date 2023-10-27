@@ -305,8 +305,8 @@ const DEFAULT_ECOMMERCE_PRODUCTS_MAPPING = {
 
 const DEFAULT_ECOMMERCE_PROPS_MAPPING = {
   "transaction_id": "transaction_id",
-  "value": "cart_turnovertaxfree",
-  "value--tax": "cart_turnovertaxincluded",
+  "value": "cart_turnovertaxincluded",
+  "value--tax": "cart_turnovertaxfree",
   "shipping": "shipping_costtaxincluded",
   "currency||items.currency": "cart_currency",
   "coupon": "transaction_promocode",

@@ -427,7 +427,7 @@ ___TEMPLATE_PARAMETERS___
           {
             "type": "LABEL",
             "name": "ecommerceDefaultPropsMapping",
-            "displayName": "transaction_id → transaction_id\u003cbr /\u003e\nvalue → cart_turnovertaxfree\u003cbr /\u003e\nvalue--tax → cart_turnovertaxincluded\u003cbr /\u003e\nshipping → shipping_costtaxincluded\u003cbr /\u003e\ncurrency||items.currency → cart_currency\u003cbr /\u003e\ncoupon → transaction_promocode\u003cbr /\u003e\nitems.item_id → product_id\u003cbr /\u003e\nitems.item_name → product\u003cbr /\u003e\nitems.coupon → product_discount\u003cbr /\u003e\nitems.discount → product_discount\u003cbr /\u003e\nitems.item_brand → product_brand\u003cbr /\u003e\nitems.item_category → product_category1\u003cbr /\u003e\nitems.item_category2 → product_category2\u003cbr /\u003e\nitems.item_category3 → product_category3\u003cbr /\u003e\nitems.item_category4 → product_category4\u003cbr /\u003e\nitems.item_variant → product_variant\u003cbr /\u003e\nitems.price → product_pricetaxfree\u003cbr /\u003e\nitems.quantity → product_quantity"
+            "displayName": "transaction_id → transaction_id\u003cbr /\u003e\nvalue → cart_turnovertaxincluded\u003cbr /\u003e\nvalue--tax → cart_turnovertaxfree\u003cbr /\u003e\nshipping → shipping_costtaxincluded\u003cbr /\u003e\ncurrency||items.currency → cart_currency\u003cbr /\u003e\ncoupon → transaction_promocode\u003cbr /\u003e\nitems.item_id → product_id\u003cbr /\u003e\nitems.item_name → product\u003cbr /\u003e\nitems.coupon → product_discount\u003cbr /\u003e\nitems.discount → product_discount\u003cbr /\u003e\nitems.item_brand → product_brand\u003cbr /\u003e\nitems.item_category → product_category1\u003cbr /\u003e\nitems.item_category2 → product_category2\u003cbr /\u003e\nitems.item_category3 → product_category3\u003cbr /\u003e\nitems.item_category4 → product_category4\u003cbr /\u003e\nitems.item_variant → product_variant\u003cbr /\u003e\nitems.price → product_pricetaxfree\u003cbr /\u003e\nitems.quantity → product_quantity"
           }
         ]
       },
@@ -791,8 +791,8 @@ const DEFAULT_ECOMMERCE_PRODUCTS_MAPPING = {
 
 const DEFAULT_ECOMMERCE_PROPS_MAPPING = {
   "transaction_id": "transaction_id",
-  "value": "cart_turnovertaxfree",
-  "value--tax": "cart_turnovertaxincluded",
+  "value": "cart_turnovertaxincluded",
+  "value--tax": "cart_turnovertaxfree",
   "shipping": "shipping_costtaxincluded",
   "currency||items.currency": "cart_currency",
   "coupon": "transaction_promocode",
