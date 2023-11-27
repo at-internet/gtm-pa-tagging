@@ -57,7 +57,7 @@ const pixel = {
     if (commandChoice == "setUser") {
       const userId = data.userId || "";
       const userCategory = data.userCategory || "";
-      const storeUser = data.storeUser || true;
+      const storeUser = data.storeUser !== undefined ? data.storeUser : true;
       log('GTM Piano Analytics Tag Template - Set user - ', userId, userCategory, storeUser);
       if (userId !== "") dataLayerPush(['setUser', userId, userCategory, storeUser]);
     }
