@@ -57,7 +57,7 @@ const pixel = {
     if (commandChoice == "setUser") {
       const userId = data.userId || "";
       const userCategory = data.userCategory || "";
-      const storeUser = data.storeUser || true;
+      const storeUser = data.storeUser !== undefined ? data.storeUser : true;
       log('GTM Piano Analytics Tag Template - Set user - ', userId, userCategory, storeUser);
       if (userId !== "") dataLayerPush(['setUser', userId, userCategory, storeUser]);
     }
@@ -305,8 +305,8 @@ const DEFAULT_ECOMMERCE_PRODUCTS_MAPPING = {
 
 const DEFAULT_ECOMMERCE_PROPS_MAPPING = {
   "transaction_id": "transaction_id",
-  "value": "cart_turnovertaxfree",
-  "value--tax": "cart_turnovertaxincluded",
+  "value": "cart_turnovertaxincluded",
+  "value--tax": "cart_turnovertaxfree",
   "shipping": "shipping_costtaxincluded",
   "currency||items.currency": "cart_currency",
   "coupon": "transaction_promocode",
