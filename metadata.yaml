@@ -1,6 +1,11 @@
 homepage: "https://www.piano.io"
 documentation: "https://developers.atinternet-solutions.com/piano-analytics/"
 versions:
+  - sha: f149034b6053b2a09663f2ed185aa8c087ac4d84
+    changeNotes: |2
+      Fix storeUser option: was always true
+      Fix setProperties 'auto'
+      Fix ecommerce default tax mapping (included by default)
   - sha: a521f05701de925d01f1756e8364af58131e0170
     changeNotes: |2
       Force value type for known ecommerce properties
