@@ -115,7 +115,8 @@ const pixel = {
       }
 
       const mappedEventname = eventsMapping[data.ecomEventName] || false;
-      if (!mappedEventname) return;
+      // fail if no mapping for this event
+      if (!mappedEventname) data.gtmOnFailure();
 
       const ecommerceDatalayer = retrieveActualPush("key", "ecommerce");
 
@@ -149,7 +150,7 @@ const pixel = {
             if (mappedEventname === productEvent) productEventname = productsMapping[productEvent];
           }
           // any "product.xxx" event should inherit from items props
-          if (mappedEventname.substring(0, 8) === "product.") productEventname = mappedEventname;
+          if (isAutoItemsEvent(mappedEventname)) productEventname = mappedEventname;
 
           if (productEventname !== "") finalEvents.push({ "name": productEventname, "data": mapProperties(ecommerceDatalayer.items[index], itemPropsMapping, constantProps) });
         }
@@ -157,7 +158,7 @@ const pixel = {
       // automatically calculate "cart_quantity" property
       if (totalQuantity > 0) ecomPropsWithoutItems.cart_quantity = totalQuantity;
 
-      if (mappedEventname.substring(0, 8) !== "product.") finalEvents.push({ "name": mappedEventname, "data": mapProperties(ecomPropsWithoutItems, ecomPropsMapping, constantProps) });
+      if (!isAutoItemsEvent(mappedEventname)) finalEvents.push({ "name": mappedEventname, "data": mapProperties(ecomPropsWithoutItems, ecomPropsMapping, constantProps) });
 
       for (let index = finalEvents.length - 1; index >= 0; index--) {
         const element = finalEvents[index];
@@ -197,6 +198,15 @@ const pixel = {
 
 const sdkSrc = confObject.sdkSrc || "https://tag.aticdn.net/piano-analytics.js";
 injectScript(sdkSrc, pixel.init, data.gtmOnFailure, 'pixelPA');
+
+function isAutoItemsEvent(eventName) {
+  const prefixes = ['product','publisher','self_promotion'];
+  const eventPrefix = eventName.split('.')[0];
+  for (let index = 0; index < prefixes.length; index++) {
+    if(prefixes[index] == eventPrefix) return true;
+  }
+  return false;
+}
 
 function mapProperties(input, mapping, constantProps) {
   let output = JSON.parse(JSON.stringify(input));
@@ -296,6 +306,7 @@ const DEFAULT_ECOMMERCE_EVENTS_MAPPING = {
   "add_shipping_info": "cart.delivery",
   "add_payment_info": "cart.payment",
   "purchase": "transaction.confirmation",
+  "view_promotion": "publisher.impression"
 };
 
 const DEFAULT_ECOMMERCE_PRODUCTS_MAPPING = {
