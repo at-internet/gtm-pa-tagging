@@ -117,6 +117,9 @@ const pixel = {
       const mappedEventname = eventsMapping[data.ecomEventName] || false;
       // fail if no mapping for this event
       if (!mappedEventname) data.gtmOnFailure();
+      var isProductEvent = checkVarPrefix(mappedEventname, ['product'], '.');
+      var isOnsiteadEvent = checkVarPrefix(mappedEventname, ['publisher','self_promotion'], '.');
+      var isAutoItemsEvent = isProductEvent || isOnsiteadEvent;
 
       const ecommerceDatalayer = retrieveActualPush("key", "ecommerce");
 
@@ -134,8 +137,11 @@ const pixel = {
       }
 
       for (var prop in propsMapping) {
-        if (prop.substring(0, 6) === "items.") itemPropsMapping[prop.slice(6)] = propsMapping[prop];
-        else ecomPropsMapping[prop] = propsMapping[prop];
+        if(isAutoItemsEvent) {
+          if (prop.substring(0, 6) === "items.") itemPropsMapping[prop.slice(6)] = propsMapping[prop];
+          else itemPropsMapping[prop] = propsMapping[prop];
+        }
+        ecomPropsMapping[prop] = propsMapping[prop];
       }
 
       if (ecommerceDatalayer.items) {
@@ -150,7 +156,14 @@ const pixel = {
             if (mappedEventname === productEvent) productEventname = productsMapping[productEvent];
           }
           // any "product.xxx" event should inherit from items props
-          if (isAutoItemsEvent(mappedEventname)) productEventname = mappedEventname;
+          if (isAutoItemsEvent) productEventname = mappedEventname;
+          if (isOnsiteadEvent) {
+            for (var mappedProp in ecomPropsMapping) {
+              if(checkVarPrefix(ecomPropsMapping[mappedProp], ['onsitead'], '_')) {
+                ecommerceDatalayer.items[index][mappedProp] = ecommerceDatalayer[mappedProp];
+              }
+            }
+          }
 
           if (productEventname !== "") finalEvents.push({ "name": productEventname, "data": mapProperties(ecommerceDatalayer.items[index], itemPropsMapping, constantProps) });
         }
@@ -158,7 +171,9 @@ const pixel = {
       // automatically calculate "cart_quantity" property
       if (totalQuantity > 0) ecomPropsWithoutItems.cart_quantity = totalQuantity;
 
-      if (!isAutoItemsEvent(mappedEventname)) finalEvents.push({ "name": mappedEventname, "data": mapProperties(ecomPropsWithoutItems, ecomPropsMapping, constantProps) });
+      if (!isAutoItemsEvent) {
+        finalEvents.push({ "name": mappedEventname, "data": mapProperties(ecomPropsWithoutItems, ecomPropsMapping, constantProps) });
+      }
 
       for (let index = finalEvents.length - 1; index >= 0; index--) {
         const element = finalEvents[index];
@@ -170,6 +185,11 @@ const pixel = {
         // automatically add "transaction_id" property if none defined
         if (!element.data.transaction_id && ecommerceDatalayer.transaction_id) {
           element.data.transaction_id = ecommerceDatalayer.transaction_id;
+        }
+        // automatically add "onsitead_type" property if none defined
+        if (!element.data.onsitead_type) {
+          if(checkVarPrefix(element.name, ['publisher'], '.')) { element.data.onsitead_type = 'Publisher'; }
+          if(checkVarPrefix(element.name, ['self_promotion'], '.')) { element.data.onsitead_type = 'Self promotion'; }
         }
 
         let missingMandatoryProps = { error: false, props: [] };
@@ -199,11 +219,10 @@ const pixel = {
 const sdkSrc = confObject.sdkSrc || "https://tag.aticdn.net/piano-analytics.js";
 injectScript(sdkSrc, pixel.init, data.gtmOnFailure, 'pixelPA');
 
-function isAutoItemsEvent(eventName) {
-  const prefixes = ['product','publisher','self_promotion'];
-  const eventPrefix = eventName.split('.')[0];
+function checkVarPrefix(val, prefixes, splitter) {
+  const valPrefix = val.split(splitter)[0];
   for (let index = 0; index < prefixes.length; index++) {
-    if(prefixes[index] == eventPrefix) return true;
+    if(prefixes[index] == valPrefix) return true;
   }
   return false;
 }
@@ -306,12 +325,15 @@ const DEFAULT_ECOMMERCE_EVENTS_MAPPING = {
   "add_shipping_info": "cart.delivery",
   "add_payment_info": "cart.payment",
   "purchase": "transaction.confirmation",
-  "view_promotion": "publisher.impression"
+  "view_promotion": "publisher.impression",
+  "select_promotion": "publisher.click",
 };
 
 const DEFAULT_ECOMMERCE_PRODUCTS_MAPPING = {
   "transaction.confirmation": "product.purchased",
   "cart.display": "product.display",
+  "publisher.impression": "publisher.impression",
+  "publisher.click": "publisher.click",
 };
 
 const DEFAULT_ECOMMERCE_PROPS_MAPPING = {
@@ -321,6 +343,10 @@ const DEFAULT_ECOMMERCE_PROPS_MAPPING = {
   "shipping": "shipping_costtaxincluded",
   "currency||items.currency": "cart_currency",
   "coupon": "transaction_promocode",
+  "creative_name": "onsitead_variant",
+  "creative_slot": "onsitead_category",
+  "promotion_id": "onsitead_campaign",
+  "promotion_name": "onsitead_creation",
   "items.item_id": "product_id",
   "items.item_name": "product",
   "items.coupon": "product_discount",
