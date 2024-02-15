@@ -12,9 +12,6 @@ const makeInteger = require('makeInteger');
 const makeNumber = require('makeNumber');
 const makeString = require('makeString');
 
-const gtmId = copyFromDataLayer('gtm.uniqueEventId');
-const dataLayer = copyFromWindow('dataLayer');
-
 log('GTM Piano Analytics Tag Template - Data =', data);
 
 const confObject = data.configuration;
@@ -26,7 +23,7 @@ setInWindow('_pac', _pac, true);
 const pdlObject = data.configuration.pdlObject || {};
 const windowPdl = copyFromWindow('pdl') || {};
 merge(windowPdl, pdlObject);
-if (windowPdl !== {}) setInWindow('pdl', windowPdl, true);
+if (JSON.stringify(windowPdl) !== '{}') setInWindow('pdl', windowPdl, true);
 
 const pixel = {
   init: () => {
@@ -51,7 +48,7 @@ const pixel = {
         return { "name": event.multipleEventsName, "data": eventProps };
       });
       log('GTM Piano Analytics Tag Template - Send events - ', finalEvents);
-      if (finalEvents !== []) dataLayerPush(['sendEvents', finalEvents]);
+      if (JSON.stringify(finalEvents) !== '[]') dataLayerPush(['sendEvents', finalEvents]);
     }
 
     if (commandChoice == "setUser") {
@@ -109,10 +106,10 @@ const pixel = {
       let ecomPropsMapping = {};
       let totalQuantity = 0;
 
-      if (customEventsMapping !== {}) {
+      if (JSON.stringify(customEventsMapping) !== '{}') {
         for (var eventMapping in customEventsMapping) { eventsMapping[eventMapping] = customEventsMapping[eventMapping]; }
       }
-      if (customProductsMapping !== {}) {
+      if (JSON.stringify(customProductsMapping) !== '{}') {
         for (var productMapping in customProductsMapping) { productsMapping[productMapping] = customProductsMapping[productMapping]; }
       }
 
@@ -123,12 +120,12 @@ const pixel = {
       var isOnsiteadEvent = checkVarPrefix(mappedEventname, ['publisher','self_promotion'], '.');
       var isAutoItemsEvent = isProductEvent || isOnsiteadEvent;
 
-      const ecommerceDatalayer = retrieveActualPush("key", "ecommerce");
+      const ecommerceDatalayer = copyFromDataLayer('ecommerce');
 
       let ecomPropsWithoutItems = JSON.parse(JSON.stringify(ecommerceDatalayer));
       Object.delete(ecomPropsWithoutItems, "items");
 
-      if (customPropsMapping !== {}) {
+      if (JSON.stringify(customPropsMapping) !== '{}') {
         for (var propMapping in customPropsMapping) {
           if (propMapping.substring(0, 2) === '$$') {
             constantProps[customPropsMapping[propMapping]] = propMapping.substring(2);
@@ -211,7 +208,7 @@ const pixel = {
       }
 
       log('GTM Piano Analytics Tag Template - eCommerce bridge');
-      if (finalEvents !== []) dataLayerPush(['sendEvents', finalEvents]);
+      if (JSON.stringify(finalEvents !== '[]')) dataLayerPush(['sendEvents', finalEvents]);
     }
 
     data.gtmOnSuccess();
@@ -278,7 +275,7 @@ function mapProperties(input, mapping, constantProps) {
       output[mapping[key]] = outputValue;
       Object.delete(output, key);
     }
-    if (constantProps !== {}) {
+    if (JSON.stringify(constantProps) !== '{}') {
       Object.keys(constantProps).forEach(function (key) {
         output[key] = constantProps[key];
       });
@@ -376,51 +373,6 @@ const ECOMMERCE_MANDATORY_PROPERTIES = {
   "transaction.confirmation": ["cart_id", "transaction_id"],
   "product.purchased": ["cart_id", "product_id", "transaction_id"],
 };
-
-// Use https://github.com/gtm-templates-simo-ahava/data-layer-picker to retrieve actually pushed DL values
-function retrieveActualPush(type, value) {
-  const dataType = type || "object";
-  const dataValue = value || "";
-  const get = (obj, path, def) => {
-    path = path.split('.');
-    let current = obj;
-
-    for (let i = 0; i < path.length; i++) {
-      if (!current[path[i]]) return def;
-      current = current[path[i]];
-    }
-    return current;
-  };
-
-  if (dataLayer && gtmId) {
-    // Get object from dataLayer that matches the gtm.uniqueEventId
-    let obj = dataLayer.map(o => {
-      // If falsy (due to e.g. sandbox API suppressing the object), return empty object
-      if (!o) return {};
-
-      // If a regular dataLayer object, return it
-      if (o['gtm.uniqueEventId']) return o;
-
-      // Otherwise assume it's a template constructor-based object
-      // Clone the object to remove constructor, then return first
-      // property in the object (the wrapper)
-      o = JSON.parse(JSON.stringify(o));
-      for (let prop in o) {
-        return o[prop];
-      }
-      // Filter to only include the item(s) where the event ID matches
-    }).filter(o => !!o && o['gtm.uniqueEventId'] === gtmId);
-
-    // Get the first item from the matches
-    obj = obj.length ? obj[0] : {};
-    switch (dataType) {
-      case 'object':
-        return obj;
-      case 'key':
-        return get(obj, dataValue, obj[dataValue]);
-    }
-  }
-}
 
 function merge(a, b) {
   for (var key in b) { a[key] = b[key]; }
