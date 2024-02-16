@@ -120,8 +120,8 @@ const pixel = {
       var isOnsiteadEvent = checkVarPrefix(mappedEventname, ['publisher','self_promotion'], '.');
       var isAutoItemsEvent = isProductEvent || isOnsiteadEvent;
 
-      const ecommerceDatalayer = copyFromDataLayer('ecommerce');
-
+      const ecommerceDatalayer = retrieveActualPush('key', 'ecommerce');
+      
       let ecomPropsWithoutItems = JSON.parse(JSON.stringify(ecommerceDatalayer));
       Object.delete(ecomPropsWithoutItems, "items");
 
@@ -244,7 +244,6 @@ function mapProperties(input, mapping, constantProps) {
         case "product_id":
         case "cart_id":
         case "product":
-        case "product_id":
         case "product_brand":
         case "product_category1":
         case "product_category2":
@@ -373,6 +372,53 @@ const ECOMMERCE_MANDATORY_PROPERTIES = {
   "transaction.confirmation": ["cart_id", "transaction_id"],
   "product.purchased": ["cart_id", "product_id", "transaction_id"],
 };
+
+// Use https://github.com/gtm-templates-simo-ahava/data-layer-picker to retrieve actually pushed DL values
+function retrieveActualPush(type, value) {
+  const gtmId = data.gtmEventId;
+  const dataLayer = copyFromWindow('dataLayer');
+  const dataType = type || "object";
+  const dataValue = value || "";
+  const get = (obj, path, def) => {
+    path = path.split('.');
+    let current = obj;
+
+    for (let i = 0; i < path.length; i++) {
+      if (!current[path[i]]) return def;
+      current = current[path[i]];
+    }
+    return current;
+  };
+
+  if (dataLayer && gtmId) {
+    // Get object from dataLayer that matches the gtm.uniqueEventId
+    let obj = dataLayer.map(o => {
+      // If falsy (due to e.g. sandbox API suppressing the object), return empty object
+      if (!o) return {};
+
+      // If a regular dataLayer object, return it
+      if (o['gtm.uniqueEventId']) return o;
+
+      // Otherwise assume it's a template constructor-based object
+      // Clone the object to remove constructor, then return first
+      // property in the object (the wrapper)
+      o = JSON.parse(JSON.stringify(o));
+      for (let prop in o) {
+        return o[prop];
+      }
+      // Filter to only include the item(s) where the event ID matches
+    }).filter(o => !!o && o['gtm.uniqueEventId'] === gtmId);
+
+    // Get the first item from the matches
+    obj = obj.length ? obj[0] : {};
+    switch (dataType) {
+      case 'object':
+        return obj;
+      case 'key':
+        return get(obj, dataValue, obj[dataValue]);
+    }
+  }
+}
 
 function merge(a, b) {
   for (var key in b) { a[key] = b[key]; }
