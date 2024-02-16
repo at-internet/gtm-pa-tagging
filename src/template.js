@@ -7,7 +7,6 @@ const getType = require('getType');
 const JSON = require('JSON');
 const Object = require('Object');
 const createQueue = require('createQueue');
-const copyFromDataLayer = require('copyFromDataLayer');
 const makeInteger = require('makeInteger');
 const makeNumber = require('makeNumber');
 const makeString = require('makeString');
@@ -136,10 +135,8 @@ const pixel = {
       }
 
       for (var prop in propsMapping) {
-        if(isAutoItemsEvent) {
-          if (prop.substring(0, 6) === "items.") itemPropsMapping[prop.slice(6)] = propsMapping[prop];
-          else itemPropsMapping[prop] = propsMapping[prop];
-        }
+        if (prop.substring(0, 6) === "items.") itemPropsMapping[prop.slice(6)] = propsMapping[prop];
+        else itemPropsMapping[prop] = propsMapping[prop];
         ecomPropsMapping[prop] = propsMapping[prop];
       }
 
