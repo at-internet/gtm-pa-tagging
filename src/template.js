@@ -14,14 +14,30 @@ const makeString = require('makeString');
 log('GTM Piano Analytics Tag Template - Data =', data);
 
 const confObject = data.configuration;
+
 let _pac = copyFromWindow('_pac') || { privacy: [] };
 merge(_pac, confObject);
 const queueVarName = _pac.queueVarName || "_paq";
-setInWindow('_pac', _pac, true);
 
 const pdlObject = data.configuration.pdlObject || {};
-const windowPdl = copyFromWindow('pdl') || {};
+let windowPdl = copyFromWindow('pdl') || {};
+if (JSON.stringify(windowPdl) == '{}') {
+  windowPdl = {
+    migration: {
+      browserId: {
+        source: 'PA'
+      }
+    },
+    cookies: {
+      storageMode: 'fixed'
+    }
+  };
+}
 merge(windowPdl, pdlObject);
+
+Object.delete(_pac, "pdlObject");
+
+setInWindow('_pac', _pac, true);
 if (JSON.stringify(windowPdl) !== '{}') setInWindow('pdl', windowPdl, true);
 
 const pixel = {
