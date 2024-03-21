@@ -383,7 +383,7 @@ ___TEMPLATE_PARAMETERS___
           {
             "type": "LABEL",
             "name": "ecommerceDefaultEventsMapping",
-            "displayName": "view_item_list → product.display\u003cbr /\u003e\nview_item → product.page_display\u003cbr /\u003e\nadd_to_cart → product.add_to_cart\u003cbr /\u003e\nremove_from_cart → product.remove_from_cart\u003cbr /\u003e\nview_cart → cart.display → product.display\u003cbr /\u003e\nadd_shipping_info → cart.delivery\u003cbr /\u003e\nadd_payment_info → cart.payment\u003cbr /\u003e\npurchase → transaction.confirmation → product.purchased"
+            "displayName": "view_item_list → product.display\u003cbr /\u003e\nview_item → product.page_display\u003cbr /\u003e\nadd_to_cart → product.add_to_cart\u003cbr /\u003e\nremove_from_cart → product.remove_from_cart\u003cbr /\u003e\nview_cart → cart.display → product.display\u003cbr /\u003e\nadd_shipping_info → cart.delivery\u003cbr /\u003e\nadd_payment_info → cart.payment\u003cbr /\u003e\npurchase → transaction.confirmation → product.purchased\u003cbr /\u003e\nview_promotion → publisher.impression\u003cbr /\u003e\nselect_promotion → publisher.click"
           }
         ]
       },
@@ -427,7 +427,7 @@ ___TEMPLATE_PARAMETERS___
           {
             "type": "LABEL",
             "name": "ecommerceDefaultPropsMapping",
-            "displayName": "transaction_id → transaction_id\u003cbr /\u003e\nvalue → cart_turnovertaxincluded\u003cbr /\u003e\nvalue--tax → cart_turnovertaxfree\u003cbr /\u003e\nshipping → shipping_costtaxincluded\u003cbr /\u003e\ncurrency||items.currency → cart_currency\u003cbr /\u003e\ncoupon → transaction_promocode\u003cbr /\u003e\nitems.item_id → product_id\u003cbr /\u003e\nitems.item_name → product\u003cbr /\u003e\nitems.coupon → product_discount\u003cbr /\u003e\nitems.discount → product_discount\u003cbr /\u003e\nitems.item_brand → product_brand\u003cbr /\u003e\nitems.item_category → product_category1\u003cbr /\u003e\nitems.item_category2 → product_category2\u003cbr /\u003e\nitems.item_category3 → product_category3\u003cbr /\u003e\nitems.item_category4 → product_category4\u003cbr /\u003e\nitems.item_variant → product_variant\u003cbr /\u003e\nitems.price → product_pricetaxfree\u003cbr /\u003e\nitems.quantity → product_quantity"
+            "displayName": "transaction_id → transaction_id\u003cbr /\u003e\nvalue → cart_turnovertaxfree\u003cbr /\u003e\nvalue+tax → cart_turnovertaxincluded\u003cbr /\u003e\nshipping → shipping_costtaxincluded\u003cbr /\u003e\ncurrency+items.currency → cart_currency\u003cbr /\u003e\ncoupon → transaction_promocode\u003cbr /\u003e\ncreative_name → onsitead_variant\u003cbr /\u003e\ncreative_slot → onsitead_category\u003cbr /\u003e\npromotion_id → onsitead_campaign\u003cbr /\u003e\npromotion_name → onsitead_creation\u003cbr /\u003e\nitems.item_id → product_id\u003cbr /\u003e\nitems.item_name → product\u003cbr /\u003e\nitems.coupon → product_discount\u003cbr /\u003e\nitems.discount → product_discount\u003cbr /\u003e\nitems.item_brand → product_brand\u003cbr /\u003e\nitems.item_category → product_category1\u003cbr /\u003e\nitems.item_category2 → product_category2\u003cbr /\u003e\nitems.item_category3 → product_category3\u003cbr /\u003e\nitems.item_category4 → product_category4\u003cbr /\u003e\nitems.item_variant → product_variant\u003cbr /\u003e\nitems.price → product_pricetaxfree\u003cbr /\u003e\nitems.quantity → product_quantity"
           }
         ]
       },
@@ -468,6 +468,7 @@ ___JS_TEMPLATE___
 const injectScript = require('injectScript');
 const copyFromWindow = require('copyFromWindow');
 const setInWindow = require('setInWindow');
+const callLater = require('callLater');
 const makeTableMap = require('makeTableMap');
 const log = require('logToConsole');
 
@@ -493,26 +494,40 @@ const getType = require('getType');
 const JSON = require('JSON');
 const Object = require('Object');
 const createQueue = require('createQueue');
-const copyFromDataLayer = require('copyFromDataLayer');
 const makeInteger = require('makeInteger');
 const makeNumber = require('makeNumber');
 const makeString = require('makeString');
 
-const gtmId = copyFromDataLayer('gtm.uniqueEventId');
-const dataLayer = copyFromWindow('dataLayer');
+const templateVersion = 'pat_24-03.001';
 
 log('GTM Piano Analytics Tag Template - Data =', data);
 
 const confObject = data.configuration;
+
 let _pac = copyFromWindow('_pac') || { privacy: [] };
 merge(_pac, confObject);
 const queueVarName = _pac.queueVarName || "_paq";
-setInWindow('_pac', _pac, true);
 
 const pdlObject = data.configuration.pdlObject || {};
-const windowPdl = copyFromWindow('pdl') || {};
+let windowPdl = copyFromWindow('pdl') || {};
+if (JSON.stringify(windowPdl) == '{}') {
+  windowPdl = {
+    migration: {
+      browserId: {
+        source: 'PA'
+      }
+    },
+    cookies: {
+      storageMode: 'fixed'
+    }
+  };
+}
 merge(windowPdl, pdlObject);
-if (windowPdl !== {}) setInWindow('pdl', windowPdl, true);
+
+Object.delete(_pac, "pdlObject");
+
+setInWindow('_pac', _pac, true);
+if (JSON.stringify(windowPdl) !== '{}') setInWindow('pdl', windowPdl, true);
 
 const pixel = {
   init: () => {
@@ -537,7 +552,7 @@ const pixel = {
         return { "name": event.multipleEventsName, "data": eventProps };
       });
       log('GTM Piano Analytics Tag Template - Send events - ', finalEvents);
-      if (finalEvents !== []) dataLayerPush(['sendEvents', finalEvents]);
+      if (JSON.stringify(finalEvents) !== '[]') dataLayerPush(['sendEvents', finalEvents]);
     }
 
     if (commandChoice == "setUser") {
@@ -558,7 +573,9 @@ const pixel = {
       const setPropObject = {};
       const setPropOptions = {};
       data.setPropTable && data.setPropTable.map(function (prop) {
-        setPropObject[propPrefix(prop.setPropKey, prop.setPropType)] = propTypeCast(prop.setPropValue, (prop.setPropType === 'auto'));
+        if(prop.setPropValue && prop.setPropKey) {
+          setPropObject[propPrefix(prop.setPropKey, prop.setPropType)] = propTypeCast(prop.setPropValue, (prop.setPropType === 'auto'));
+        }
       });
       setPropOptions.persistent = data.setPropPersistent;
       setPropOptions.events = data.setPropEvents && data.setPropEvents.map(function (event) {
@@ -593,22 +610,26 @@ const pixel = {
       let ecomPropsMapping = {};
       let totalQuantity = 0;
 
-      if (customEventsMapping !== {}) {
+      if (JSON.stringify(customEventsMapping) !== '{}') {
         for (var eventMapping in customEventsMapping) { eventsMapping[eventMapping] = customEventsMapping[eventMapping]; }
       }
-      if (customProductsMapping !== {}) {
+      if (JSON.stringify(customProductsMapping) !== '{}') {
         for (var productMapping in customProductsMapping) { productsMapping[productMapping] = customProductsMapping[productMapping]; }
       }
 
       const mappedEventname = eventsMapping[data.ecomEventName] || false;
-      if (!mappedEventname) return;
+      // fail if no mapping for this event
+      if (!mappedEventname) data.gtmOnFailure();
+      var isProductEvent = checkVarPrefix(mappedEventname, ['product'], '.');
+      var isOnsiteadEvent = checkVarPrefix(mappedEventname, ['publisher','self_promotion'], '.');
+      var isAutoItemsEvent = isProductEvent || isOnsiteadEvent;
 
-      const ecommerceDatalayer = retrieveActualPush("key", "ecommerce");
-
+      const ecommerceDatalayer = retrieveActualPush('key', 'ecommerce');
+      
       let ecomPropsWithoutItems = JSON.parse(JSON.stringify(ecommerceDatalayer));
       Object.delete(ecomPropsWithoutItems, "items");
 
-      if (customPropsMapping !== {}) {
+      if (JSON.stringify(customPropsMapping) !== '{}') {
         for (var propMapping in customPropsMapping) {
           if (propMapping.substring(0, 2) === '$$') {
             constantProps[customPropsMapping[propMapping]] = propMapping.substring(2);
@@ -620,7 +641,8 @@ const pixel = {
 
       for (var prop in propsMapping) {
         if (prop.substring(0, 6) === "items.") itemPropsMapping[prop.slice(6)] = propsMapping[prop];
-        else ecomPropsMapping[prop] = propsMapping[prop];
+        else itemPropsMapping[prop] = propsMapping[prop];
+        ecomPropsMapping[prop] = propsMapping[prop];
       }
 
       if (ecommerceDatalayer.items) {
@@ -635,7 +657,14 @@ const pixel = {
             if (mappedEventname === productEvent) productEventname = productsMapping[productEvent];
           }
           // any "product.xxx" event should inherit from items props
-          if (mappedEventname.substring(0, 8) === "product.") productEventname = mappedEventname;
+          if (isAutoItemsEvent) productEventname = mappedEventname;
+          if (isOnsiteadEvent) {
+            for (var mappedProp in ecomPropsMapping) {
+              if(checkVarPrefix(ecomPropsMapping[mappedProp], ['onsitead'], '_')) {
+                ecommerceDatalayer.items[index][mappedProp] = ecommerceDatalayer[mappedProp];
+              }
+            }
+          }
 
           if (productEventname !== "") finalEvents.push({ "name": productEventname, "data": mapProperties(ecommerceDatalayer.items[index], itemPropsMapping, constantProps) });
         }
@@ -643,7 +672,9 @@ const pixel = {
       // automatically calculate "cart_quantity" property
       if (totalQuantity > 0) ecomPropsWithoutItems.cart_quantity = totalQuantity;
 
-      if (mappedEventname.substring(0, 8) !== "product.") finalEvents.push({ "name": mappedEventname, "data": mapProperties(ecomPropsWithoutItems, ecomPropsMapping, constantProps) });
+      if (!isAutoItemsEvent) {
+        finalEvents.push({ "name": mappedEventname, "data": mapProperties(ecomPropsWithoutItems, ecomPropsMapping, constantProps) });
+      }
 
       for (let index = finalEvents.length - 1; index >= 0; index--) {
         const element = finalEvents[index];
@@ -655,6 +686,11 @@ const pixel = {
         // automatically add "transaction_id" property if none defined
         if (!element.data.transaction_id && ecommerceDatalayer.transaction_id) {
           element.data.transaction_id = ecommerceDatalayer.transaction_id;
+        }
+        // automatically add "onsitead_type" property if none defined
+        if (!element.data.onsitead_type) {
+          if(checkVarPrefix(element.name, ['publisher'], '.')) { element.data.onsitead_type = 'Publisher'; }
+          if(checkVarPrefix(element.name, ['self_promotion'], '.')) { element.data.onsitead_type = 'Self promotion'; }
         }
 
         let missingMandatoryProps = { error: false, props: [] };
@@ -674,7 +710,7 @@ const pixel = {
       }
 
       log('GTM Piano Analytics Tag Template - eCommerce bridge');
-      if (finalEvents !== []) dataLayerPush(['sendEvents', finalEvents]);
+      if (JSON.stringify(finalEvents !== '[]')) dataLayerPush(['sendEvents', finalEvents]);
     }
 
     data.gtmOnSuccess();
@@ -683,6 +719,14 @@ const pixel = {
 
 const sdkSrc = confObject.sdkSrc || "https://tag.aticdn.net/piano-analytics.js";
 injectScript(sdkSrc, pixel.init, data.gtmOnFailure, 'pixelPA');
+
+function checkVarPrefix(val, prefixes, splitter) {
+  const valPrefix = val.split(splitter)[0];
+  for (let index = 0; index < prefixes.length; index++) {
+    if(prefixes[index] == valPrefix) return true;
+  }
+  return false;
+}
 
 function mapProperties(input, mapping, constantProps) {
   let output = JSON.parse(JSON.stringify(input));
@@ -702,7 +746,6 @@ function mapProperties(input, mapping, constantProps) {
         case "product_id":
         case "cart_id":
         case "product":
-        case "product_id":
         case "product_brand":
         case "product_category1":
         case "product_category2":
@@ -733,7 +776,7 @@ function mapProperties(input, mapping, constantProps) {
       output[mapping[key]] = outputValue;
       Object.delete(output, key);
     }
-    if (constantProps !== {}) {
+    if (JSON.stringify(constantProps) !== '{}') {
       Object.keys(constantProps).forEach(function (key) {
         output[key] = constantProps[key];
       });
@@ -782,11 +825,15 @@ const DEFAULT_ECOMMERCE_EVENTS_MAPPING = {
   "add_shipping_info": "cart.delivery",
   "add_payment_info": "cart.payment",
   "purchase": "transaction.confirmation",
+  "view_promotion": "publisher.impression",
+  "select_promotion": "publisher.click",
 };
 
 const DEFAULT_ECOMMERCE_PRODUCTS_MAPPING = {
   "transaction.confirmation": "product.purchased",
   "cart.display": "product.display",
+  "publisher.impression": "publisher.impression",
+  "publisher.click": "publisher.click",
 };
 
 const DEFAULT_ECOMMERCE_PROPS_MAPPING = {
@@ -796,6 +843,10 @@ const DEFAULT_ECOMMERCE_PROPS_MAPPING = {
   "shipping": "shipping_costtaxincluded",
   "currency||items.currency": "cart_currency",
   "coupon": "transaction_promocode",
+  "creative_name": "onsitead_variant",
+  "creative_slot": "onsitead_category",
+  "promotion_id": "onsitead_campaign",
+  "promotion_name": "onsitead_creation",
   "items.item_id": "product_id",
   "items.item_name": "product",
   "items.coupon": "product_discount",
@@ -826,6 +877,8 @@ const ECOMMERCE_MANDATORY_PROPERTIES = {
 
 // Use https://github.com/gtm-templates-simo-ahava/data-layer-picker to retrieve actually pushed DL values
 function retrieveActualPush(type, value) {
+  const gtmId = data.gtmEventId;
+  const dataLayer = copyFromWindow('dataLayer');
   const dataType = type || "object";
   const dataValue = value || "";
   const get = (obj, path, def) => {
@@ -1213,36 +1266,6 @@ ___WEB_PERMISSIONS___
           "value": {
             "type": 1,
             "string": "debug"
-          }
-        }
-      ]
-    },
-    "clientAnnotations": {
-      "isEditedByUser": true
-    },
-    "isRequired": true
-  },
-  {
-    "instance": {
-      "key": {
-        "publicId": "read_data_layer",
-        "versionId": "1"
-      },
-      "param": [
-        {
-          "key": "keyPatterns",
-          "value": {
-            "type": 2,
-            "listItem": [
-              {
-                "type": 1,
-                "string": "ecommerce.*"
-              },
-              {
-                "type": 1,
-                "string": "gtm.uniqueEventId"
-              }
-            ]
           }
         }
       ]
