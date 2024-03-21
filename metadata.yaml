@@ -1,6 +1,11 @@
 homepage: "https://www.piano.io"
 documentation: "https://developers.atinternet-solutions.com/piano-analytics/"
 versions:
+  - sha: 769b412df794b2d59a2cb35e59e6ed57d55a7fb2
+    changeNotes: |2
+      Fix tag still running when using tag sequencing
+      Handle undefined variables for property value
+      Fix setVisitor command
   - sha: f149034b6053b2a09663f2ed185aa8c087ac4d84
     changeNotes: |2
       Fix storeUser option: was always true
