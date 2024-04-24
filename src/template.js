@@ -56,7 +56,7 @@ const pixel = {
 
     if (commandChoice == "sendEvents") {
       const events = data.multipleEventsTable || [];
-      const finalEvents = events.filter(function(event) {
+      const finalEvents = events.filter(function (event) {
         if (event.multipleEventsName === undefined) return false;
         return true;
       }).map(function (event) {
@@ -86,7 +86,7 @@ const pixel = {
       const setPropObject = {};
       const setPropOptions = {};
       data.setPropTable && data.setPropTable.map(function (prop) {
-        if(prop.setPropValue && prop.setPropKey) {
+        if (getType(prop.setPropValue) !== 'undefined' && getType(prop.setPropKey) !== 'undefined') {
           setPropObject[propPrefix(prop.setPropKey, prop.setPropType)] = propTypeCast(prop.setPropValue, (prop.setPropType === 'auto'));
         }
       });
@@ -134,11 +134,11 @@ const pixel = {
       // fail if no mapping for this event
       if (!mappedEventname) data.gtmOnFailure();
       var isProductEvent = checkVarPrefix(mappedEventname, ['product'], '.');
-      var isOnsiteadEvent = checkVarPrefix(mappedEventname, ['publisher','self_promotion'], '.');
+      var isOnsiteadEvent = checkVarPrefix(mappedEventname, ['publisher', 'self_promotion'], '.');
       var isAutoItemsEvent = isProductEvent || isOnsiteadEvent;
 
       const ecommerceDatalayer = retrieveActualPush('key', 'ecommerce');
-      
+
       let ecomPropsWithoutItems = JSON.parse(JSON.stringify(ecommerceDatalayer));
       Object.delete(ecomPropsWithoutItems, "items");
 
@@ -173,7 +173,7 @@ const pixel = {
           if (isAutoItemsEvent) productEventname = mappedEventname;
           if (isOnsiteadEvent) {
             for (var mappedProp in ecomPropsMapping) {
-              if(checkVarPrefix(ecomPropsMapping[mappedProp], ['onsitead'], '_')) {
+              if (checkVarPrefix(ecomPropsMapping[mappedProp], ['onsitead'], '_')) {
                 ecommerceDatalayer.items[index][mappedProp] = ecommerceDatalayer[mappedProp];
               }
             }
@@ -202,8 +202,8 @@ const pixel = {
         }
         // automatically add "onsitead_type" property if none defined
         if (!element.data.onsitead_type) {
-          if(checkVarPrefix(element.name, ['publisher'], '.')) { element.data.onsitead_type = 'Publisher'; }
-          if(checkVarPrefix(element.name, ['self_promotion'], '.')) { element.data.onsitead_type = 'Self promotion'; }
+          if (checkVarPrefix(element.name, ['publisher'], '.')) { element.data.onsitead_type = 'Publisher'; }
+          if (checkVarPrefix(element.name, ['self_promotion'], '.')) { element.data.onsitead_type = 'Self promotion'; }
         }
 
         let missingMandatoryProps = { error: false, props: [] };
@@ -236,7 +236,7 @@ injectScript(sdkSrc, pixel.init, data.gtmOnFailure, 'pixelPA');
 function checkVarPrefix(val, prefixes, splitter) {
   const valPrefix = val.split(splitter)[0];
   for (let index = 0; index < prefixes.length; index++) {
-    if(prefixes[index] == valPrefix) return true;
+    if (prefixes[index] == valPrefix) return true;
   }
   return false;
 }
