@@ -11,7 +11,7 @@ const makeInteger = require('makeInteger');
 const makeNumber = require('makeNumber');
 const makeString = require('makeString');
 
-const templateVersion = 'pat_24-03.001';
+const templateVersion = 'pat_24-04.001';
 
 log('GTM Piano Analytics Tag Template - Data =', data);
 
