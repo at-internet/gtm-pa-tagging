@@ -1,6 +1,8 @@
 homepage: "https://www.piano.io"
 documentation: "https://developers.atinternet-solutions.com/piano-analytics/"
 versions:
+  - sha: 2caead9dd5dbb1442af950d92932877045b97ba0
+    changeNotes: Manage consent v2
   - sha: 589c13c7eaea6cfad4faee9c50d29f888ee43368
     changeNotes: Fix set properties with undefined variables
   - sha: 769b412df794b2d59a2cb35e59e6ed57d55a7fb2
