@@ -312,6 +312,32 @@ ___TEMPLATE_PARAMETERS___
     "subParams": [
       {
         "type": "SELECT",
+        "name": "consentPurpose",
+        "displayName": "Consent Purpose",
+        "macrosInSelect": true,
+        "selectItems": [
+          {
+            "value": "AM",
+            "displayValue": "AM (Audience Measurement)"
+          },
+          {
+            "value": "CP",
+            "displayValue": "CP (Content personalization and Performance)"
+          },
+          {
+            "value": "AD",
+            "displayValue": "AD (Advertising)"
+          },
+          {
+            "value": "PR",
+            "displayValue": "PR (Personal Relationship)"
+          }
+        ],
+        "simpleValueType": true,
+        "defaultValue": "AM"
+      },
+      {
+        "type": "SELECT",
         "name": "consentMode",
         "displayName": "Consent Mode",
         "macrosInSelect": true,
@@ -498,7 +524,7 @@ const makeInteger = require('makeInteger');
 const makeNumber = require('makeNumber');
 const makeString = require('makeString');
 
-const templateVersion = 'pat_24-04.001';
+const templateVersion = 'pat_24-08.001';
 
 log('GTM Piano Analytics Tag Template - Data =', data);
 
@@ -573,7 +599,7 @@ const pixel = {
       const setPropObject = {};
       const setPropOptions = {};
       data.setPropTable && data.setPropTable.map(function (prop) {
-        if (getType(prop.setPropValue) !== 'undefined' && getType(prop.setPropKey) !== 'undefined') {
+        if(prop.setPropValue && prop.setPropKey) {
           setPropObject[propPrefix(prop.setPropKey, prop.setPropType)] = propTypeCast(prop.setPropValue, (prop.setPropType === 'auto'));
         }
       });
@@ -593,8 +619,12 @@ const pixel = {
 
     if (commandChoice == "setConsentMode") {
       const consentMode = data.consentMode || "";
-      log('GTM Piano Analytics Tag Template - Set consent mode - ', consentMode);
-      if (consentMode !== "") dataLayerPush(['consent.setMode', consentMode]);
+      const consentPurpose = data.consentPurpose || "AM";
+      log('GTM Piano Analytics Tag Template - Set consent mode - ', consentPurpose, consentMode);
+      if (consentMode !== "") {
+        if(windowPdl.requireConsent == 'v2') dataLayerPush(['consent.setByPurpose', consentPurpose, consentMode]);
+        else dataLayerPush(['consent.setMode', consentMode]);
+      }
     }
 
     if (commandChoice == "ecommerceMapping") {
