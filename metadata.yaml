@@ -1,6 +1,19 @@
 homepage: "https://www.piano.io"
-documentation: "https://developers.atinternet-solutions.com/piano-analytics/"
+documentation: "https://developers.piano.io/analytics/"
 versions:
+  - sha: 253f82294c19db0495054ef7b04a240ce99d0dbe
+    changeNotes: Fix ecommerce bridge when the SDK loads outside the CDN
+  - sha: 3b5471f121a79b60b1229b0b10aecb811f2669cd
+    changeNotes: Add template tests for tagging commands and the ecommerce bridge
+  - sha: 2a486a7ab366b03b18877ff196d27fb41a0ed919
+    changeNotes: |2
+      Fix ecommerce bridge cart_id without transaction_id
+      Recover ecommerce object from previous same-event dataLayer push (SPA)
+      Fix empty sendEvents parenthesis and avoid Still running on bridge errors
+  - sha: 2787e50e0ab68f9e81baee5a2df4568a2d6bd46c
+    changeNotes: |2
+      Skip SDK injection when the SDK source is outside https://tag.aticdn.net/
+      Allow loading a CDDC or self-hosted SDK from a Custom HTML tag
   - sha: 2caead9dd5dbb1442af950d92932877045b97ba0
     changeNotes: Manage consent v2
   - sha: 589c13c7eaea6cfad4faee9c50d29f888ee43368

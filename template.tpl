@@ -512,6 +512,7 @@ injectScript("https://tag.aticdn.net/piano-analytics.js", pixel.init, data.gtmOn
 ___SANDBOXED_JS_FOR_WEB_TEMPLATE___
 
 const injectScript = require('injectScript');
+const queryPermission = require('queryPermission');
 const copyFromWindow = require('copyFromWindow');
 const setInWindow = require('setInWindow');
 const makeTableMap = require('makeTableMap');
@@ -524,7 +525,7 @@ const makeInteger = require('makeInteger');
 const makeNumber = require('makeNumber');
 const makeString = require('makeString');
 
-const templateVersion = 'pat_24-08.001';
+const templateVersion = 'pat_26-10.001';
 
 log('GTM Piano Analytics Tag Template - Data =', data);
 
@@ -554,6 +555,65 @@ Object.delete(_pac, "pdlObject");
 
 setInWindow('_pac', _pac, true);
 if (JSON.stringify(windowPdl) !== '{}') setInWindow('pdl', windowPdl, true);
+
+const DEFAULT_ECOMMERCE_EVENTS_MAPPING = {
+  "view_item_list": "product.display",
+  "view_item": "product.page_display",
+  "add_to_cart": "product.add_to_cart",
+  "remove_from_cart": "product.remove_from_cart",
+  "view_cart": "cart.display",
+  "add_shipping_info": "cart.delivery",
+  "add_payment_info": "cart.payment",
+  "purchase": "transaction.confirmation",
+  "view_promotion": "publisher.impression",
+  "select_promotion": "publisher.click",
+};
+
+const DEFAULT_ECOMMERCE_PRODUCTS_MAPPING = {
+  "transaction.confirmation": "product.purchased",
+  "cart.display": "product.display",
+  "publisher.impression": "publisher.impression",
+  "publisher.click": "publisher.click",
+};
+
+const DEFAULT_ECOMMERCE_PROPS_MAPPING = {
+  "transaction_id": "transaction_id",
+  "value": "cart_turnovertaxincluded",
+  "value--tax": "cart_turnovertaxfree",
+  "shipping": "shipping_costtaxincluded",
+  "currency||items.currency": "cart_currency",
+  "coupon": "transaction_promocode",
+  "creative_name": "onsitead_variant",
+  "creative_slot": "onsitead_category",
+  "promotion_id": "onsitead_campaign",
+  "promotion_name": "onsitead_creation",
+  "items.item_id": "product_id",
+  "items.item_name": "product",
+  "items.coupon": "product_discount",
+  "items.discount": "product_discount",
+  "items.item_brand": "product_brand",
+  "items.item_category": "product_category1",
+  "items.item_category2": "product_category2",
+  "items.item_category3": "product_category3",
+  "items.item_category4": "product_category4",
+  "items.item_variant": "product_variant",
+  "items.price": "product_pricetaxfree",
+  "items.quantity": "product_quantity",
+};
+
+const ECOMMERCE_MANDATORY_PROPERTIES = {
+  "product.display": ["product_id"],
+  "product.page_display": ["product_id"],
+  "product.add_to_cart": ["product_id"],
+  "product.remove_from_cart": ["product_id"],
+  "cart.creation": ["cart_id"],
+  "cart.display": ["cart_id"],
+  "cart.update": ["cart_id"],
+  "cart.delivery": ["cart_id"],
+  "cart.payment": ["cart_id"],
+  "transaction.confirmation": ["cart_id", "transaction_id"],
+  "product.purchased": ["cart_id", "product_id", "transaction_id"],
+};
 
 const pixel = {
   init: () => {
@@ -628,127 +688,156 @@ const pixel = {
     }
 
     if (commandChoice == "ecommerceMapping") {
-      let finalEvents = [];
-      const customEventsMapping = data.ecomEventsMapping && makeTableMap(data.ecomEventsMapping, 'ecommerceEventInput', 'ecommerceEventOutput');
-      const customProductsMapping = data.ecomEventsMapping && makeTableMap(data.ecomEventsMapping, 'ecommerceEventOutput', 'ecommerceProductEventsOutput');
-      const customPropsMapping = data.ecomPropsMapping && makeTableMap(data.ecomPropsMapping, 'ecommercePropInput', 'ecommercePropOutput');
-      const constantProps = {};
-      let eventsMapping = DEFAULT_ECOMMERCE_EVENTS_MAPPING;
-      let productsMapping = DEFAULT_ECOMMERCE_PRODUCTS_MAPPING;
-      let propsMapping = DEFAULT_ECOMMERCE_PROPS_MAPPING;
-      let itemPropsMapping = {};
-      let ecomPropsMapping = {};
-      let totalQuantity = 0;
+      try {
+        let finalEvents = [];
+        const customEventsMapping = data.ecomEventsMapping && makeTableMap(data.ecomEventsMapping, 'ecommerceEventInput', 'ecommerceEventOutput');
+        const customProductsMapping = data.ecomEventsMapping && makeTableMap(data.ecomEventsMapping, 'ecommerceEventOutput', 'ecommerceProductEventsOutput');
+        const customPropsMapping = data.ecomPropsMapping && makeTableMap(data.ecomPropsMapping, 'ecommercePropInput', 'ecommercePropOutput');
+        const constantProps = {};
+        let eventsMapping = DEFAULT_ECOMMERCE_EVENTS_MAPPING;
+        let productsMapping = DEFAULT_ECOMMERCE_PRODUCTS_MAPPING;
+        let propsMapping = DEFAULT_ECOMMERCE_PROPS_MAPPING;
+        let itemPropsMapping = {};
+        let ecomPropsMapping = {};
+        let totalQuantity = 0;
 
-      if (JSON.stringify(customEventsMapping) !== '{}') {
-        for (var eventMapping in customEventsMapping) { eventsMapping[eventMapping] = customEventsMapping[eventMapping]; }
-      }
-      if (JSON.stringify(customProductsMapping) !== '{}') {
-        for (var productMapping in customProductsMapping) { productsMapping[productMapping] = customProductsMapping[productMapping]; }
-      }
+        if (JSON.stringify(customEventsMapping) !== '{}') {
+          for (var eventMapping in customEventsMapping) { eventsMapping[eventMapping] = customEventsMapping[eventMapping]; }
+        }
+        if (JSON.stringify(customProductsMapping) !== '{}') {
+          for (var productMapping in customProductsMapping) { productsMapping[productMapping] = customProductsMapping[productMapping]; }
+        }
 
-      const mappedEventname = eventsMapping[data.ecomEventName] || false;
-      // fail if no mapping for this event
-      if (!mappedEventname) data.gtmOnFailure();
-      var isProductEvent = checkVarPrefix(mappedEventname, ['product'], '.');
-      var isOnsiteadEvent = checkVarPrefix(mappedEventname, ['publisher','self_promotion'], '.');
-      var isAutoItemsEvent = isProductEvent || isOnsiteadEvent;
+        const mappedEventname = eventsMapping[data.ecomEventName] || false;
+        // fail if no mapping for this event
+        if (!mappedEventname) {
+          data.gtmOnFailure();
+          return;
+        }
+        var isProductEvent = checkVarPrefix(mappedEventname, ['product'], '.');
+        var isOnsiteadEvent = checkVarPrefix(mappedEventname, ['publisher','self_promotion'], '.');
+        var isAutoItemsEvent = isProductEvent || isOnsiteadEvent;
 
-      const ecommerceDatalayer = retrieveActualPush('key', 'ecommerce');
-      
-      let ecomPropsWithoutItems = JSON.parse(JSON.stringify(ecommerceDatalayer));
-      Object.delete(ecomPropsWithoutItems, "items");
+        const ecommerceDatalayer = retrieveEcommerceDatalayer();
+        if (!ecommerceDatalayer || getType(ecommerceDatalayer) !== 'object') {
+          log('GTM Piano Analytics Tag Template - eCommerce bridge aborted, ecommerce object not found');
+          data.gtmOnFailure();
+          return;
+        }
 
-      if (JSON.stringify(customPropsMapping) !== '{}') {
-        for (var propMapping in customPropsMapping) {
-          if (propMapping.substring(0, 2) === '$$') {
-            constantProps[customPropsMapping[propMapping]] = propMapping.substring(2);
-          } else {
-            propsMapping[propMapping] = customPropsMapping[propMapping];
+        let ecomPropsWithoutItems = JSON.parse(JSON.stringify(ecommerceDatalayer));
+        Object.delete(ecomPropsWithoutItems, "items");
+
+        if (JSON.stringify(customPropsMapping) !== '{}') {
+          for (var propMapping in customPropsMapping) {
+            if (propMapping.substring(0, 2) === '$$') {
+              constantProps[customPropsMapping[propMapping]] = propMapping.substring(2);
+            } else {
+              propsMapping[propMapping] = customPropsMapping[propMapping];
+            }
           }
         }
-      }
 
-      for (var prop in propsMapping) {
-        if (prop.substring(0, 6) === "items.") itemPropsMapping[prop.slice(6)] = propsMapping[prop];
-        else itemPropsMapping[prop] = propsMapping[prop];
-        ecomPropsMapping[prop] = propsMapping[prop];
-      }
+        for (var prop in propsMapping) {
+          if (prop.substring(0, 6) === "items.") itemPropsMapping[prop.slice(6)] = propsMapping[prop];
+          else itemPropsMapping[prop] = propsMapping[prop];
+          ecomPropsMapping[prop] = propsMapping[prop];
+        }
 
-      if (ecommerceDatalayer.items) {
-        // automatically calculate "cart_nbdistinctproduct" property
-        if (ecommerceDatalayer.items.length > 0) ecomPropsWithoutItems.cart_nbdistinctproduct = ecommerceDatalayer.items.length;
-        // we expect one event per product
-        for (let index = 0; index < ecommerceDatalayer.items.length; index++) {
-          if (ecommerceDatalayer.items[index].quantity) totalQuantity += makeInteger(ecommerceDatalayer.items[index].quantity);
-          let productEventname = "";
-          // producing complementary products events
-          for (var productEvent in productsMapping) {
-            if (mappedEventname === productEvent) productEventname = productsMapping[productEvent];
+        if (ecommerceDatalayer.items) {
+          // automatically calculate "cart_nbdistinctproduct" property
+          if (ecommerceDatalayer.items.length > 0) ecomPropsWithoutItems.cart_nbdistinctproduct = ecommerceDatalayer.items.length;
+          // we expect one event per product
+          for (let index = 0; index < ecommerceDatalayer.items.length; index++) {
+            if (ecommerceDatalayer.items[index].quantity) totalQuantity += makeInteger(ecommerceDatalayer.items[index].quantity);
+            let productEventname = "";
+            // producing complementary products events
+            for (var productEvent in productsMapping) {
+              if (mappedEventname === productEvent) productEventname = productsMapping[productEvent];
+            }
+            // any "product.xxx" event should inherit from items props
+            if (isAutoItemsEvent) productEventname = mappedEventname;
+            if (isOnsiteadEvent) {
+              for (var mappedProp in ecomPropsMapping) {
+                if(checkVarPrefix(ecomPropsMapping[mappedProp], ['onsitead'], '_')) {
+                  ecommerceDatalayer.items[index][mappedProp] = ecommerceDatalayer[mappedProp];
+                }
+              }
+            }
+
+            if (productEventname !== "") finalEvents.push({ "name": productEventname, "data": mapProperties(ecommerceDatalayer.items[index], itemPropsMapping, constantProps) });
           }
-          // any "product.xxx" event should inherit from items props
-          if (isAutoItemsEvent) productEventname = mappedEventname;
-          if (isOnsiteadEvent) {
-            for (var mappedProp in ecomPropsMapping) {
-              if(checkVarPrefix(ecomPropsMapping[mappedProp], ['onsitead'], '_')) {
-                ecommerceDatalayer.items[index][mappedProp] = ecommerceDatalayer[mappedProp];
+        }
+        // automatically calculate "cart_quantity" property
+        if (totalQuantity > 0) ecomPropsWithoutItems.cart_quantity = totalQuantity;
+
+        if (!isAutoItemsEvent) {
+          finalEvents.push({ "name": mappedEventname, "data": mapProperties(ecomPropsWithoutItems, ecomPropsMapping, constantProps) });
+        }
+
+        for (let index = finalEvents.length - 1; index >= 0; index--) {
+          const element = finalEvents[index];
+
+          // automatically add "cart_id" property if none defined
+          if (!element.data.cart_id) {
+            if (ecommerceDatalayer.cart_id) {
+              element.data.cart_id = ecommerceDatalayer.cart_id;
+            } else if (ecommerceDatalayer.transaction_id) {
+              element.data.cart_id = ecommerceDatalayer.transaction_id;
+            }
+          }
+          // automatically add "transaction_id" property if none defined
+          if (!element.data.transaction_id && ecommerceDatalayer.transaction_id) {
+            element.data.transaction_id = ecommerceDatalayer.transaction_id;
+          }
+          // automatically add "onsitead_type" property if none defined
+          if (!element.data.onsitead_type) {
+            if(checkVarPrefix(element.name, ['publisher'], '.')) { element.data.onsitead_type = 'Publisher'; }
+            if(checkVarPrefix(element.name, ['self_promotion'], '.')) { element.data.onsitead_type = 'Self promotion'; }
+          }
+
+          let missingMandatoryProps = { error: false, props: [] };
+          const mandatoryProps = ECOMMERCE_MANDATORY_PROPERTIES[element.name] || false;
+          if (mandatoryProps) {
+            for (let index = 0; index < mandatoryProps.length; index++) {
+              if (!element.data.hasOwnProperty(mandatoryProps[index])) {
+                missingMandatoryProps.error = true;
+                missingMandatoryProps.props.push(mandatoryProps[index]);
               }
             }
           }
-
-          if (productEventname !== "") finalEvents.push({ "name": productEventname, "data": mapProperties(ecommerceDatalayer.items[index], itemPropsMapping, constantProps) });
-        }
-      }
-      // automatically calculate "cart_quantity" property
-      if (totalQuantity > 0) ecomPropsWithoutItems.cart_quantity = totalQuantity;
-
-      if (!isAutoItemsEvent) {
-        finalEvents.push({ "name": mappedEventname, "data": mapProperties(ecomPropsWithoutItems, ecomPropsMapping, constantProps) });
-      }
-
-      for (let index = finalEvents.length - 1; index >= 0; index--) {
-        const element = finalEvents[index];
-
-        // automatically add "cart_id" property if none defined
-        if (!element.data.cart_id && ecommerceDatalayer.transaction_id) {
-          element.data.cart_id = ecommerceDatalayer.transaction_id;
-        }
-        // automatically add "transaction_id" property if none defined
-        if (!element.data.transaction_id && ecommerceDatalayer.transaction_id) {
-          element.data.transaction_id = ecommerceDatalayer.transaction_id;
-        }
-        // automatically add "onsitead_type" property if none defined
-        if (!element.data.onsitead_type) {
-          if(checkVarPrefix(element.name, ['publisher'], '.')) { element.data.onsitead_type = 'Publisher'; }
-          if(checkVarPrefix(element.name, ['self_promotion'], '.')) { element.data.onsitead_type = 'Self promotion'; }
-        }
-
-        let missingMandatoryProps = { error: false, props: [] };
-        const mandatoryProps = ECOMMERCE_MANDATORY_PROPERTIES[element.name] || false;
-        if (mandatoryProps) {
-          for (let index = 0; index < mandatoryProps.length; index++) {
-            if (!element.data.hasOwnProperty(mandatoryProps[index])) {
-              missingMandatoryProps.error = true;
-              missingMandatoryProps.props.push(mandatoryProps[index]);
-            }
+          if (missingMandatoryProps.error) {
+            finalEvents.splice(index, 1);
+            log('GTM Piano Analytics Tag Template - Event "' + element.name + '" aborted, mandatory parameter missing: ', missingMandatoryProps.props);
           }
         }
-        if (missingMandatoryProps.error) {
-          finalEvents.splice(index, 1);
-          log('GTM Piano Analytics Tag Template - Event "' + element.name + '" aborted, mandatory parameter missing: ', missingMandatoryProps.props);
-        }
-      }
 
-      log('GTM Piano Analytics Tag Template - eCommerce bridge');
-      if (JSON.stringify(finalEvents !== '[]')) dataLayerPush(['sendEvents', finalEvents]);
+        log('GTM Piano Analytics Tag Template - eCommerce bridge');
+        if (JSON.stringify(finalEvents) !== '[]') dataLayerPush(['sendEvents', finalEvents]);
+      } catch (e) {
+        log('GTM Piano Analytics Tag Template - eCommerce bridge error - ', e);
+        data.gtmOnFailure();
+        return;
+      }
     }
 
     data.gtmOnSuccess();
   }
 };
 
-const sdkSrc = confObject.sdkSrc || "https://tag.aticdn.net/piano-analytics.js";
-injectScript(sdkSrc, pixel.init, data.gtmOnFailure, 'pixelPA');
+const cdnPrefix = 'https://tag.aticdn.net/';
+const sdkSrc = confObject.sdkSrc || cdnPrefix + 'piano-analytics.js';
+if (sdkSrc.indexOf(cdnPrefix) === 0) {
+  if (queryPermission('inject_script', sdkSrc)) {
+    injectScript(sdkSrc, pixel.init, data.gtmOnFailure, 'pixelPA');
+  } else {
+    log('GTM Piano Analytics Tag Template - Missing inject_script permission for', sdkSrc);
+    data.gtmOnFailure();
+  }
+} else {
+  log('GTM Piano Analytics Tag Template - sdkSrc is outside tag.aticdn.net; skipping injectScript. Load the SDK from the page or a Custom HTML tag:', sdkSrc);
+  pixel.init();
+}
 
 function checkVarPrefix(val, prefixes, splitter) {
   const valPrefix = val.split(splitter)[0];
@@ -806,11 +895,6 @@ function mapProperties(input, mapping, constantProps) {
       output[mapping[key]] = outputValue;
       Object.delete(output, key);
     }
-    if (JSON.stringify(constantProps) !== '{}') {
-      Object.keys(constantProps).forEach(function (key) {
-        output[key] = constantProps[key];
-      });
-    }
   });
   Object.keys(mapping).forEach(function (key) {
     if (key.indexOf("+") !== -1) {
@@ -843,67 +927,32 @@ function mapProperties(input, mapping, constantProps) {
       }
     }
   });
+  if (JSON.stringify(constantProps) !== '{}') {
+    Object.keys(constantProps).forEach(function (key) {
+      if (!output.hasOwnProperty(key)) {
+        output[key] = constantProps[key];
+      }
+    });
+  }
   return output;
 }
 
-const DEFAULT_ECOMMERCE_EVENTS_MAPPING = {
-  "view_item_list": "product.display",
-  "view_item": "product.page_display",
-  "add_to_cart": "product.add_to_cart",
-  "remove_from_cart": "product.remove_from_cart",
-  "view_cart": "cart.display",
-  "add_shipping_info": "cart.delivery",
-  "add_payment_info": "cart.payment",
-  "purchase": "transaction.confirmation",
-  "view_promotion": "publisher.impression",
-  "select_promotion": "publisher.click",
-};
+function unwrapDataLayerItem(o) {
+  // If falsy (due to e.g. sandbox API suppressing the object), return empty object
+  if (!o) return {};
 
-const DEFAULT_ECOMMERCE_PRODUCTS_MAPPING = {
-  "transaction.confirmation": "product.purchased",
-  "cart.display": "product.display",
-  "publisher.impression": "publisher.impression",
-  "publisher.click": "publisher.click",
-};
+  // If a regular dataLayer object, return it
+  if (o['gtm.uniqueEventId']) return o;
 
-const DEFAULT_ECOMMERCE_PROPS_MAPPING = {
-  "transaction_id": "transaction_id",
-  "value": "cart_turnovertaxincluded",
-  "value--tax": "cart_turnovertaxfree",
-  "shipping": "shipping_costtaxincluded",
-  "currency||items.currency": "cart_currency",
-  "coupon": "transaction_promocode",
-  "creative_name": "onsitead_variant",
-  "creative_slot": "onsitead_category",
-  "promotion_id": "onsitead_campaign",
-  "promotion_name": "onsitead_creation",
-  "items.item_id": "product_id",
-  "items.item_name": "product",
-  "items.coupon": "product_discount",
-  "items.discount": "product_discount",
-  "items.item_brand": "product_brand",
-  "items.item_category": "product_category1",
-  "items.item_category2": "product_category2",
-  "items.item_category3": "product_category3",
-  "items.item_category4": "product_category4",
-  "items.item_variant": "product_variant",
-  "items.price": "product_pricetaxfree",
-  "items.quantity": "product_quantity",
-};
-
-const ECOMMERCE_MANDATORY_PROPERTIES = {
-  "product.display": ["product_id"],
-  "product.page_display": ["product_id"],
-  "product.add_to_cart": ["product_id"],
-  "product.remove_from_cart": ["product_id"],
-  "cart.creation": ["cart_id"],
-  "cart.display": ["cart_id"],
-  "cart.update": ["cart_id"],
-  "cart.delivery": ["cart_id"],
-  "cart.payment": ["cart_id"],
-  "transaction.confirmation": ["cart_id", "transaction_id"],
-  "product.purchased": ["cart_id", "product_id", "transaction_id"],
-};
+  // Otherwise assume it's a template constructor-based object
+  // Clone the object to remove constructor, then return first
+  // property in the object (the wrapper)
+  o = JSON.parse(JSON.stringify(o));
+  for (let prop in o) {
+    return o[prop];
+  }
+  return {};
+}
 
 // Use https://github.com/gtm-templates-simo-ahava/data-layer-picker to retrieve actually pushed DL values
 function retrieveActualPush(type, value) {
@@ -924,22 +973,8 @@ function retrieveActualPush(type, value) {
 
   if (dataLayer && gtmId) {
     // Get object from dataLayer that matches the gtm.uniqueEventId
-    let obj = dataLayer.map(o => {
-      // If falsy (due to e.g. sandbox API suppressing the object), return empty object
-      if (!o) return {};
-
-      // If a regular dataLayer object, return it
-      if (o['gtm.uniqueEventId']) return o;
-
-      // Otherwise assume it's a template constructor-based object
-      // Clone the object to remove constructor, then return first
-      // property in the object (the wrapper)
-      o = JSON.parse(JSON.stringify(o));
-      for (let prop in o) {
-        return o[prop];
-      }
-      // Filter to only include the item(s) where the event ID matches
-    }).filter(o => !!o && o['gtm.uniqueEventId'] === gtmId);
+    let obj = dataLayer.map(unwrapDataLayerItem)
+      .filter(o => !!o && String(o['gtm.uniqueEventId']) === String(gtmId));
 
     // Get the first item from the matches
     obj = obj.length ? obj[0] : {};
@@ -948,6 +983,46 @@ function retrieveActualPush(type, value) {
         return obj;
       case 'key':
         return get(obj, dataValue, obj[dataValue]);
+    }
+  }
+}
+
+function retrieveEcommerceDatalayer() {
+  const currentPush = retrieveActualPush('object') || {};
+  if (currentPush.hasOwnProperty('ecommerce')) {
+    if (currentPush.ecommerce && getType(currentPush.ecommerce) === 'object') {
+      return currentPush.ecommerce;
+    }
+    // ecommerce present but cleared/invalid on the current push: do not reuse a previous cart
+    return;
+  }
+
+  const gtmId = data.gtmEventId;
+  const eventName = data.ecomEventName;
+  const dataLayer = copyFromWindow('dataLayer');
+  if (!dataLayer || !gtmId) return;
+
+  let currentIndex = -1;
+  for (let i = dataLayer.length - 1; i >= 0; i--) {
+    const item = unwrapDataLayerItem(dataLayer[i]);
+    if (item && String(item['gtm.uniqueEventId']) === String(gtmId)) {
+      currentIndex = i;
+      break;
+    }
+  }
+  if (currentIndex < 0) return;
+
+  for (let i = currentIndex - 1; i >= 0; i--) {
+    const item = unwrapDataLayerItem(dataLayer[i]);
+    if (!item) continue;
+    if (item.hasOwnProperty('ecommerce') && item.ecommerce === null) {
+      break;
+    }
+    if (item.ecommerce && getType(item.ecommerce) === 'object') {
+      if (!eventName || item.event === eventName) {
+        log('GTM Piano Analytics Tag Template - eCommerce object retrieved from previous dataLayer push');
+        return item.ecommerce;
+      }
     }
   }
 }
@@ -984,7 +1059,6 @@ function propPrefix(key, type) {
   if (prefix[type]) return prefix[type] + '' + key;
   return key;
 }
-
 
 ___WEB_PERMISSIONS___
 
@@ -1336,7 +1410,829 @@ ___WEB_PERMISSIONS___
 
 ___TESTS___
 
-scenarios: []
+scenarios:
+- name: Skip injectScript for non-CDN sdkSrc
+  code: |-
+    const mockConfig = {
+      collectDomain: 'https://analytics.piano.io',
+      site: '123456',
+      queueVarName: '_paq',
+      sdkSrc: 'https://nox.example.com/piano-analytics.js'
+    };
+
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+
+    let queueCalls = [];
+    mock('createQueue', (varName) => {
+      return (args) => {
+        queueCalls.push({varName: varName, args: args});
+      };
+    });
+
+    mock('setInWindow', () => {});
+    let injectCalled = false;
+    mock('injectScript', (src, onSuccess, onFailure) => {
+      injectCalled = true;
+      onSuccess();
+    });
+
+    runCode({
+      commandChoice: 'sendEvent',
+      eventName: 'page.display',
+      eventProps: [
+        {propKey: 'page', propValue: 'homepage'}
+      ],
+      configuration: mockConfig
+    });
+
+    assertThat(injectCalled).isEqualTo(false);
+    assertThat(queueCalls.length).isEqualTo(1);
+    assertThat(queueCalls[0].args[0]).isEqualTo('sendEvent');
+    assertThat(queueCalls[0].args[1]).isEqualTo('page.display');
+
+- name: CDN sdkSrc injects piano-analytics.js then runs command
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    let injectSrc = '';
+    mock('injectScript', (src, onSuccess) => {
+      injectSrc = src;
+      onSuccess();
+    });
+
+    runCode({
+      commandChoice: 'sendEvent',
+      eventName: 'page.display',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(injectSrc).isEqualTo('https://tag.aticdn.net/piano-analytics.js');
+    assertThat(queueCalls.length).isEqualTo(1);
+    assertThat(queueCalls[0][0]).isEqualTo('sendEvent');
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: Missing sdkSrc defaults to CDN URL
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    mock('createQueue', () => () => {});
+
+    let injectSrc = '';
+    mock('injectScript', (src, onSuccess) => {
+      injectSrc = src;
+      onSuccess();
+    });
+
+    runCode({
+      commandChoice: 'sendEvent',
+      eventName: 'page.display',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456'
+      }
+    });
+
+    assertThat(injectSrc).isEqualTo('https://tag.aticdn.net/piano-analytics.js');
+
+- name: Denied inject_script permission calls gtmOnFailure
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => false);
+
+    let injectCalled = false;
+    mock('injectScript', () => { injectCalled = true; });
+
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'sendEvent',
+      eventName: 'page.display',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(injectCalled).isEqualTo(false);
+    assertThat(queueCalls.length).isEqualTo(0);
+    assertApi('gtmOnFailure').wasCalled();
+    assertApi('gtmOnSuccess').wasNotCalled();
+
+- name: setInWindow writes _pac without pdlObject and merges pdl defaults
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+
+    let written = {};
+    mock('setInWindow', (key, value) => { written[key] = value; });
+    mock('createQueue', () => () => {});
+    mock('injectScript', (src, onSuccess) => { onSuccess(); });
+
+    runCode({
+      commandChoice: 'sendEvent',
+      eventName: 'page.display',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js',
+        pdlObject: {
+          requireConsent: 'v2',
+          consent: { defaultPreset: { PA: 'opt-in' } }
+        }
+      }
+    });
+
+    assertThat(written._pac.pdlObject).isUndefined();
+    assertThat(written._pac.collectDomain).isEqualTo('https://analytics.piano.io');
+    assertThat(written.pdl.requireConsent).isEqualTo('v2');
+    assertThat(written.pdl.migration.browserId.source).isEqualTo('PA');
+    assertThat(written.pdl.cookies.storageMode).isEqualTo('fixed');
+
+- name: sendEvent without name succeeds without queue push
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'sendEvent',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(0);
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: sendEvents parses JSON props and skips rows without name
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'sendEvents',
+      multipleEventsTable: [
+        {multipleEventsName: 'page.display', multipleEventsProps: '{"page":"home"}'},
+        {multipleEventsProps: '{"page":"orphan"}'},
+        {multipleEventsName: 'click.navigation', multipleEventsProps: {click: 'nav'}}
+      ],
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(1);
+    assertThat(queueCalls[0][0]).isEqualTo('sendEvents');
+    assertThat(queueCalls[0][1]).isEqualTo([
+      {name: 'page.display', data: {page: 'home'}},
+      {name: 'click.navigation', data: {click: 'nav'}}
+    ]);
+
+- name: sendEvents with empty table does not push sendEvents
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'sendEvents',
+      multipleEventsTable: [
+        {multipleEventsProps: '{}'}
+      ],
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(0);
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: setUser forwards storeUser false and defaults omitted storeUser to true
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'setUser',
+      userId: 'u1',
+      userCategory: 'vip',
+      storeUser: false,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+    assertThat(queueCalls[0]).isEqualTo(['setUser', 'u1', 'vip', false]);
+
+    queueCalls = [];
+    runCode({
+      commandChoice: 'setUser',
+      userId: 'u2',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+    assertThat(queueCalls[0]).isEqualTo(['setUser', 'u2', '', true]);
+
+- name: setUser without id does not push
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'setUser',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(0);
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: setVisitorId pushes setVisitorId
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'setVisitorId',
+      visitorId: 'vid-1',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+
+    assertThat(queueCalls[0]).isEqualTo(['setVisitorId', 'vid-1']);
+
+- name: setProperties applies typed prefixes and options
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'setProperties',
+      setPropTable: [
+        {setPropKey: 'page', setPropValue: 'home', setPropType: 'string'},
+        {setPropKey: 'count', setPropValue: '3', setPropType: 'integer'},
+        {setPropKey: 'ok', setPropValue: 'true', setPropType: 'boolean'},
+        {setPropKey: 'day', setPropValue: '2024-01-01', setPropType: 'date'},
+        {setPropKey: 'tags', setPropValue: '["a","b"]', setPropType: 'array'},
+        {setPropKey: 'autoVal', setPropValue: 'raw', setPropType: 'auto'},
+        {setPropKey: 'skip', setPropValue: '', setPropType: 'string'},
+        {setPropValue: 'orphan', setPropType: 'string'}
+      ],
+      setPropPersistent: true,
+      setPropEvents: [
+        {setPropEvent: 'page.display'},
+        {setPropEvent: 'click.*'}
+      ],
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+
+    assertThat(queueCalls[0][0]).isEqualTo('setProperties');
+    assertThat(queueCalls[0][1]).isEqualTo({
+      's:page': 'home',
+      'n:count': 3,
+      'b:ok': true,
+      'd:day': '2024-01-01',
+      'a:tags': ['a', 'b'],
+      autoVal: 'raw'
+    });
+    assertThat(queueCalls[0][2]).isEqualTo({
+      persistent: true,
+      events: ['page.display', 'click.*']
+    });
+
+- name: setConsentMode uses setByPurpose when requireConsent is v2
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'setConsentMode',
+      consentPurpose: 'AD',
+      consentMode: 'essential',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js',
+        pdlObject: { requireConsent: 'v2' }
+      }
+    });
+
+    assertThat(queueCalls[0]).isEqualTo(['consent.setByPurpose', 'AD', 'essential']);
+
+- name: setConsentMode uses setMode without consent v2
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return { requireConsent: 'v1' };
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'setConsentMode',
+      consentMode: 'opt-out',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+
+    assertThat(queueCalls[0]).isEqualTo(['consent.setMode', 'opt-out']);
+
+- name: setPrivacyMode pushes privacy.setMode
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'setPrivacyMode',
+      privacyMode: 'optout',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+
+    assertThat(queueCalls[0]).isEqualTo(['privacy.setMode', 'optout']);
+
+- name: queueVarName _paqueue is used by createQueue
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueName = '';
+    mock('createQueue', (varName) => {
+      queueName = varName;
+      return () => {};
+    });
+
+    runCode({
+      commandChoice: 'sendEvent',
+      eventName: 'page.display',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js',
+        queueVarName: '_paqueue'
+      }
+    });
+
+    assertThat(queueName).isEqualTo('_paqueue');
+
+- name: eCommerce purchase maps products and cart with transaction_id as cart_id
+  code: |-
+    const purchase = {
+      transaction_id: 'T1',
+      value: 12,
+      tax: 2,
+      currency: 'EUR',
+      coupon: 'A,B',
+      items: [
+        {item_id: 'P1', item_name: 'Widget', price: 10, quantity: 2, item_brand: 'Acme', item_category: 'Cat1'}
+      ]
+    };
+
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [{
+          'gtm.uniqueEventId': 42,
+          event: 'purchase',
+          ecommerce: purchase
+        }];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'purchase',
+      gtmEventId: 42,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(1);
+    assertThat(queueCalls[0][0]).isEqualTo('sendEvents');
+    const events = queueCalls[0][1];
+    assertThat(events.length).isEqualTo(2);
+    assertThat(events[0].name).isEqualTo('product.purchased');
+    assertThat(events[0].data.product_id).isEqualTo('P1');
+    assertThat(events[0].data.product).isEqualTo('Widget');
+    assertThat(events[0].data.product_pricetaxfree).isEqualTo(10);
+    assertThat(events[0].data.product_quantity).isEqualTo(2);
+    assertThat(events[0].data.cart_id).isEqualTo('T1');
+    assertThat(events[0].data.transaction_id).isEqualTo('T1');
+    assertThat(events[1].name).isEqualTo('transaction.confirmation');
+    assertThat(events[1].data.cart_turnovertaxincluded).isEqualTo(12);
+    assertThat(events[1].data.cart_turnovertaxfree).isEqualTo(10);
+    assertThat(events[1].data.cart_currency).isEqualTo('EUR');
+    assertThat(events[1].data.transaction_promocode).isEqualTo(['A', 'B']);
+    assertThat(events[1].data.cart_quantity).isEqualTo(2);
+    assertThat(events[1].data.cart_nbdistinctproduct).isEqualTo(1);
+    assertThat(events[1].data.cart_id).isEqualTo('T1');
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: eCommerce add_to_cart keeps cart_id without transaction_id
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [{
+          'gtm.uniqueEventId': 7,
+          event: 'add_to_cart',
+          ecommerce: {
+            cart_id: 'CART-9',
+            items: [{item_id: 'P2', quantity: 1}]
+          }
+        }];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'add_to_cart',
+      gtmEventId: 7,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(queueCalls[0][0]).isEqualTo('sendEvents');
+    assertThat(queueCalls[0][1].length).isEqualTo(1);
+    assertThat(queueCalls[0][1][0].name).isEqualTo('product.add_to_cart');
+    assertThat(queueCalls[0][1][0].data.product_id).isEqualTo('P2');
+    assertThat(queueCalls[0][1][0].data.product_quantity).isEqualTo(1);
+    assertThat(queueCalls[0][1][0].data.cart_id).isEqualTo('CART-9');
+
+- name: eCommerce constant $$ mapping sets cart_id
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [{
+          'gtm.uniqueEventId': 8,
+          event: 'view_cart',
+          ecommerce: {
+            items: [{item_id: 'P3', quantity: 1}]
+          }
+        }];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'view_cart',
+      gtmEventId: 8,
+      ecomPropsMapping: [
+        {ecommercePropInput: '$$C-FIXED', ecommercePropOutput: 'cart_id'}
+      ],
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    const events = queueCalls[0][1];
+    assertThat(events[0].name).isEqualTo('product.display');
+    assertThat(events[0].data.cart_id).isEqualTo('C-FIXED');
+    assertThat(events[1].name).isEqualTo('cart.display');
+    assertThat(events[1].data.cart_id).isEqualTo('C-FIXED');
+
+- name: eCommerce SPA recovers ecommerce from previous same-event push
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [
+          {
+            'gtm.uniqueEventId': 10,
+            event: 'purchase',
+            ecommerce: {
+              transaction_id: 'T-SPA',
+              value: 5,
+              items: [{item_id: 'P-SPA', quantity: 1}]
+            }
+          },
+          {
+            'gtm.uniqueEventId': 11,
+            event: 'purchase'
+          }
+        ];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'purchase',
+      gtmEventId: 11,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(1);
+    assertThat(queueCalls[0][1][0].data.product_id).isEqualTo('P-SPA');
+    assertThat(queueCalls[0][1][0].data.cart_id).isEqualTo('T-SPA');
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: eCommerce null on current push fails without reusing previous cart
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [
+          {
+            'gtm.uniqueEventId': 20,
+            event: 'purchase',
+            ecommerce: {
+              transaction_id: 'OLD',
+              items: [{item_id: 'OLD'}]
+            }
+          },
+          {
+            'gtm.uniqueEventId': 21,
+            event: 'purchase',
+            ecommerce: null
+          }
+        ];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'purchase',
+      gtmEventId: 21,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(0);
+    assertApi('gtmOnFailure').wasCalled();
+    assertApi('gtmOnSuccess').wasNotCalled();
+
+- name: eCommerce unmapped event calls gtmOnFailure
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [{
+          'gtm.uniqueEventId': 30,
+          event: 'custom_event',
+          ecommerce: {items: [{item_id: 'P'}]}
+        }];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'custom_event',
+      gtmEventId: 30,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(0);
+    assertApi('gtmOnFailure').wasCalled();
+    assertApi('gtmOnSuccess').wasNotCalled();
+
+- name: eCommerce drops events missing mandatory properties but still succeeds
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [{
+          'gtm.uniqueEventId': 31,
+          event: 'view_item',
+          ecommerce: {
+            items: [{item_name: 'NoId'}]
+          }
+        }];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'view_item',
+      gtmEventId: 31,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(0);
+    assertApi('gtmOnSuccess').wasCalled();
+    assertApi('gtmOnFailure').wasNotCalled();
+
+- name: eCommerce bridge runs when sdkSrc is outside the CDN
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [{
+          'gtm.uniqueEventId': 7,
+          event: 'add_to_cart',
+          ecommerce: {
+            cart_id: 'CART-9',
+            items: [{item_id: 'P2', quantity: 1}]
+          }
+        }];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let injectCalled = false;
+    mock('injectScript', () => { injectCalled = true; });
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'add_to_cart',
+      gtmEventId: 7,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/piano-analytics.js'
+      }
+    });
+
+    assertThat(injectCalled).isEqualTo(false);
+    assertThat(queueCalls.length).isEqualTo(1);
+    assertThat(queueCalls[0][0]).isEqualTo('sendEvents');
+    assertThat(queueCalls[0][1][0].name).isEqualTo('product.add_to_cart');
+    assertThat(queueCalls[0][1][0].data.cart_id).isEqualTo('CART-9');
+    assertApi('gtmOnSuccess').wasCalled();
+    assertApi('gtmOnFailure').wasNotCalled();
 
 
 ___NOTES___
