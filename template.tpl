@@ -512,6 +512,7 @@ injectScript("https://tag.aticdn.net/piano-analytics.js", pixel.init, data.gtmOn
 ___SANDBOXED_JS_FOR_WEB_TEMPLATE___
 
 const injectScript = require('injectScript');
+const queryPermission = require('queryPermission');
 const copyFromWindow = require('copyFromWindow');
 const setInWindow = require('setInWindow');
 const makeTableMap = require('makeTableMap');
@@ -747,8 +748,19 @@ const pixel = {
   }
 };
 
-const sdkSrc = confObject.sdkSrc || "https://tag.aticdn.net/piano-analytics.js";
-injectScript(sdkSrc, pixel.init, data.gtmOnFailure, 'pixelPA');
+const cdnPrefix = 'https://tag.aticdn.net/';
+const sdkSrc = confObject.sdkSrc || cdnPrefix + 'piano-analytics.js';
+if (sdkSrc.indexOf(cdnPrefix) === 0) {
+  if (queryPermission('inject_script', sdkSrc)) {
+    injectScript(sdkSrc, pixel.init, data.gtmOnFailure, 'pixelPA');
+  } else {
+    log('GTM Piano Analytics Tag Template - Missing inject_script permission for', sdkSrc);
+    data.gtmOnFailure();
+  }
+} else {
+  log('GTM Piano Analytics Tag Template - sdkSrc is outside tag.aticdn.net; skipping injectScript. Load the SDK from the page or a Custom HTML tag:', sdkSrc);
+  pixel.init();
+}
 
 function checkVarPrefix(val, prefixes, splitter) {
   const valPrefix = val.split(splitter)[0];
@@ -1336,7 +1348,49 @@ ___WEB_PERMISSIONS___
 
 ___TESTS___
 
-scenarios: []
+scenarios:
+- name: Skip injectScript for non-CDN sdkSrc
+  code: |-
+    const mockConfig = {
+      collectDomain: 'https://analytics.piano.io',
+      site: '123456',
+      queueVarName: '_paq',
+      sdkSrc: 'https://nox.example.com/piano-analytics.js'
+    };
+
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+
+    let queueCalls = [];
+    mock('createQueue', (varName) => {
+      return (args) => {
+        queueCalls.push({varName: varName, args: args});
+      };
+    });
+
+    mock('setInWindow', () => {});
+    let injectCalled = false;
+    mock('injectScript', (src, onSuccess, onFailure) => {
+      injectCalled = true;
+      onSuccess();
+    });
+
+    runCode({
+      commandChoice: 'sendEvent',
+      eventName: 'page.display',
+      eventProps: [
+        {propKey: 'page', propValue: 'homepage'}
+      ],
+      configuration: mockConfig
+    });
+
+    assertThat(injectCalled).isEqualTo(false);
+    assertThat(queueCalls.length).isEqualTo(1);
+    assertThat(queueCalls[0].args[0]).isEqualTo('sendEvent');
+    assertThat(queueCalls[0].args[1]).isEqualTo('page.display');
 
 
 ___NOTES___

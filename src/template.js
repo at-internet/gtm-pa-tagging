@@ -1,4 +1,5 @@
 const injectScript = require('injectScript');
+const queryPermission = require('queryPermission');
 const copyFromWindow = require('copyFromWindow');
 const setInWindow = require('setInWindow');
 const makeTableMap = require('makeTableMap');
@@ -234,8 +235,19 @@ const pixel = {
   }
 };
 
-const sdkSrc = confObject.sdkSrc || "https://tag.aticdn.net/piano-analytics.js";
-injectScript(sdkSrc, pixel.init, data.gtmOnFailure, 'pixelPA');
+const cdnPrefix = 'https://tag.aticdn.net/';
+const sdkSrc = confObject.sdkSrc || cdnPrefix + 'piano-analytics.js';
+if (sdkSrc.indexOf(cdnPrefix) === 0) {
+  if (queryPermission('inject_script', sdkSrc)) {
+    injectScript(sdkSrc, pixel.init, data.gtmOnFailure, 'pixelPA');
+  } else {
+    log('GTM Piano Analytics Tag Template - Missing inject_script permission for', sdkSrc);
+    data.gtmOnFailure();
+  }
+} else {
+  log('GTM Piano Analytics Tag Template - sdkSrc is outside tag.aticdn.net; skipping injectScript. Load the SDK from the page or a Custom HTML tag:', sdkSrc);
+  pixel.init();
+}
 
 function checkVarPrefix(val, prefixes, splitter) {
   const valPrefix = val.split(splitter)[0];
