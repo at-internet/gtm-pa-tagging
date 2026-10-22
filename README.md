@@ -81,6 +81,8 @@ You can customize the properties mapping by adding new lines. Each line describe
 1. The first field expects the Datalayer property name. You can prefix the value with `$$` to give a value instead of a property name.
 2. The second field expects the Piano Analytics property to fill with the output.
 
+`cart_id` is required for most Piano Analytics cart events. The bridge fills it from the `ecommerce` object when present (`cart_id`, otherwise `transaction_id` as a fallback). You can also map it explicitly, or set a fixed value with a `$$` prefix.
+
 ![Custom ecommerce properties mapping](res/ecommerce-custom-props-mapping.png)
 
 #### Set properties

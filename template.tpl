@@ -525,7 +525,7 @@ const makeInteger = require('makeInteger');
 const makeNumber = require('makeNumber');
 const makeString = require('makeString');
 
-const templateVersion = 'pat_24-08.001';
+const templateVersion = 'pat_26-10.001';
 
 log('GTM Piano Analytics Tag Template - Data =', data);
 
@@ -629,119 +629,137 @@ const pixel = {
     }
 
     if (commandChoice == "ecommerceMapping") {
-      let finalEvents = [];
-      const customEventsMapping = data.ecomEventsMapping && makeTableMap(data.ecomEventsMapping, 'ecommerceEventInput', 'ecommerceEventOutput');
-      const customProductsMapping = data.ecomEventsMapping && makeTableMap(data.ecomEventsMapping, 'ecommerceEventOutput', 'ecommerceProductEventsOutput');
-      const customPropsMapping = data.ecomPropsMapping && makeTableMap(data.ecomPropsMapping, 'ecommercePropInput', 'ecommercePropOutput');
-      const constantProps = {};
-      let eventsMapping = DEFAULT_ECOMMERCE_EVENTS_MAPPING;
-      let productsMapping = DEFAULT_ECOMMERCE_PRODUCTS_MAPPING;
-      let propsMapping = DEFAULT_ECOMMERCE_PROPS_MAPPING;
-      let itemPropsMapping = {};
-      let ecomPropsMapping = {};
-      let totalQuantity = 0;
+      try {
+        let finalEvents = [];
+        const customEventsMapping = data.ecomEventsMapping && makeTableMap(data.ecomEventsMapping, 'ecommerceEventInput', 'ecommerceEventOutput');
+        const customProductsMapping = data.ecomEventsMapping && makeTableMap(data.ecomEventsMapping, 'ecommerceEventOutput', 'ecommerceProductEventsOutput');
+        const customPropsMapping = data.ecomPropsMapping && makeTableMap(data.ecomPropsMapping, 'ecommercePropInput', 'ecommercePropOutput');
+        const constantProps = {};
+        let eventsMapping = DEFAULT_ECOMMERCE_EVENTS_MAPPING;
+        let productsMapping = DEFAULT_ECOMMERCE_PRODUCTS_MAPPING;
+        let propsMapping = DEFAULT_ECOMMERCE_PROPS_MAPPING;
+        let itemPropsMapping = {};
+        let ecomPropsMapping = {};
+        let totalQuantity = 0;
 
-      if (JSON.stringify(customEventsMapping) !== '{}') {
-        for (var eventMapping in customEventsMapping) { eventsMapping[eventMapping] = customEventsMapping[eventMapping]; }
-      }
-      if (JSON.stringify(customProductsMapping) !== '{}') {
-        for (var productMapping in customProductsMapping) { productsMapping[productMapping] = customProductsMapping[productMapping]; }
-      }
+        if (JSON.stringify(customEventsMapping) !== '{}') {
+          for (var eventMapping in customEventsMapping) { eventsMapping[eventMapping] = customEventsMapping[eventMapping]; }
+        }
+        if (JSON.stringify(customProductsMapping) !== '{}') {
+          for (var productMapping in customProductsMapping) { productsMapping[productMapping] = customProductsMapping[productMapping]; }
+        }
 
-      const mappedEventname = eventsMapping[data.ecomEventName] || false;
-      // fail if no mapping for this event
-      if (!mappedEventname) data.gtmOnFailure();
-      var isProductEvent = checkVarPrefix(mappedEventname, ['product'], '.');
-      var isOnsiteadEvent = checkVarPrefix(mappedEventname, ['publisher','self_promotion'], '.');
-      var isAutoItemsEvent = isProductEvent || isOnsiteadEvent;
+        const mappedEventname = eventsMapping[data.ecomEventName] || false;
+        // fail if no mapping for this event
+        if (!mappedEventname) {
+          data.gtmOnFailure();
+          return;
+        }
+        var isProductEvent = checkVarPrefix(mappedEventname, ['product'], '.');
+        var isOnsiteadEvent = checkVarPrefix(mappedEventname, ['publisher','self_promotion'], '.');
+        var isAutoItemsEvent = isProductEvent || isOnsiteadEvent;
 
-      const ecommerceDatalayer = retrieveActualPush('key', 'ecommerce');
-      
-      let ecomPropsWithoutItems = JSON.parse(JSON.stringify(ecommerceDatalayer));
-      Object.delete(ecomPropsWithoutItems, "items");
+        const ecommerceDatalayer = retrieveEcommerceDatalayer();
+        if (!ecommerceDatalayer || getType(ecommerceDatalayer) !== 'object') {
+          log('GTM Piano Analytics Tag Template - eCommerce bridge aborted, ecommerce object not found');
+          data.gtmOnFailure();
+          return;
+        }
 
-      if (JSON.stringify(customPropsMapping) !== '{}') {
-        for (var propMapping in customPropsMapping) {
-          if (propMapping.substring(0, 2) === '$$') {
-            constantProps[customPropsMapping[propMapping]] = propMapping.substring(2);
-          } else {
-            propsMapping[propMapping] = customPropsMapping[propMapping];
+        let ecomPropsWithoutItems = JSON.parse(JSON.stringify(ecommerceDatalayer));
+        Object.delete(ecomPropsWithoutItems, "items");
+
+        if (JSON.stringify(customPropsMapping) !== '{}') {
+          for (var propMapping in customPropsMapping) {
+            if (propMapping.substring(0, 2) === '$$') {
+              constantProps[customPropsMapping[propMapping]] = propMapping.substring(2);
+            } else {
+              propsMapping[propMapping] = customPropsMapping[propMapping];
+            }
           }
         }
-      }
 
-      for (var prop in propsMapping) {
-        if (prop.substring(0, 6) === "items.") itemPropsMapping[prop.slice(6)] = propsMapping[prop];
-        else itemPropsMapping[prop] = propsMapping[prop];
-        ecomPropsMapping[prop] = propsMapping[prop];
-      }
+        for (var prop in propsMapping) {
+          if (prop.substring(0, 6) === "items.") itemPropsMapping[prop.slice(6)] = propsMapping[prop];
+          else itemPropsMapping[prop] = propsMapping[prop];
+          ecomPropsMapping[prop] = propsMapping[prop];
+        }
 
-      if (ecommerceDatalayer.items) {
-        // automatically calculate "cart_nbdistinctproduct" property
-        if (ecommerceDatalayer.items.length > 0) ecomPropsWithoutItems.cart_nbdistinctproduct = ecommerceDatalayer.items.length;
-        // we expect one event per product
-        for (let index = 0; index < ecommerceDatalayer.items.length; index++) {
-          if (ecommerceDatalayer.items[index].quantity) totalQuantity += makeInteger(ecommerceDatalayer.items[index].quantity);
-          let productEventname = "";
-          // producing complementary products events
-          for (var productEvent in productsMapping) {
-            if (mappedEventname === productEvent) productEventname = productsMapping[productEvent];
+        if (ecommerceDatalayer.items) {
+          // automatically calculate "cart_nbdistinctproduct" property
+          if (ecommerceDatalayer.items.length > 0) ecomPropsWithoutItems.cart_nbdistinctproduct = ecommerceDatalayer.items.length;
+          // we expect one event per product
+          for (let index = 0; index < ecommerceDatalayer.items.length; index++) {
+            if (ecommerceDatalayer.items[index].quantity) totalQuantity += makeInteger(ecommerceDatalayer.items[index].quantity);
+            let productEventname = "";
+            // producing complementary products events
+            for (var productEvent in productsMapping) {
+              if (mappedEventname === productEvent) productEventname = productsMapping[productEvent];
+            }
+            // any "product.xxx" event should inherit from items props
+            if (isAutoItemsEvent) productEventname = mappedEventname;
+            if (isOnsiteadEvent) {
+              for (var mappedProp in ecomPropsMapping) {
+                if(checkVarPrefix(ecomPropsMapping[mappedProp], ['onsitead'], '_')) {
+                  ecommerceDatalayer.items[index][mappedProp] = ecommerceDatalayer[mappedProp];
+                }
+              }
+            }
+
+            if (productEventname !== "") finalEvents.push({ "name": productEventname, "data": mapProperties(ecommerceDatalayer.items[index], itemPropsMapping, constantProps) });
           }
-          // any "product.xxx" event should inherit from items props
-          if (isAutoItemsEvent) productEventname = mappedEventname;
-          if (isOnsiteadEvent) {
-            for (var mappedProp in ecomPropsMapping) {
-              if(checkVarPrefix(ecomPropsMapping[mappedProp], ['onsitead'], '_')) {
-                ecommerceDatalayer.items[index][mappedProp] = ecommerceDatalayer[mappedProp];
+        }
+        // automatically calculate "cart_quantity" property
+        if (totalQuantity > 0) ecomPropsWithoutItems.cart_quantity = totalQuantity;
+
+        if (!isAutoItemsEvent) {
+          finalEvents.push({ "name": mappedEventname, "data": mapProperties(ecomPropsWithoutItems, ecomPropsMapping, constantProps) });
+        }
+
+        for (let index = finalEvents.length - 1; index >= 0; index--) {
+          const element = finalEvents[index];
+
+          // automatically add "cart_id" property if none defined
+          if (!element.data.cart_id) {
+            if (ecommerceDatalayer.cart_id) {
+              element.data.cart_id = ecommerceDatalayer.cart_id;
+            } else if (ecommerceDatalayer.transaction_id) {
+              element.data.cart_id = ecommerceDatalayer.transaction_id;
+            }
+          }
+          // automatically add "transaction_id" property if none defined
+          if (!element.data.transaction_id && ecommerceDatalayer.transaction_id) {
+            element.data.transaction_id = ecommerceDatalayer.transaction_id;
+          }
+          // automatically add "onsitead_type" property if none defined
+          if (!element.data.onsitead_type) {
+            if(checkVarPrefix(element.name, ['publisher'], '.')) { element.data.onsitead_type = 'Publisher'; }
+            if(checkVarPrefix(element.name, ['self_promotion'], '.')) { element.data.onsitead_type = 'Self promotion'; }
+          }
+
+          let missingMandatoryProps = { error: false, props: [] };
+          const mandatoryProps = ECOMMERCE_MANDATORY_PROPERTIES[element.name] || false;
+          if (mandatoryProps) {
+            for (let index = 0; index < mandatoryProps.length; index++) {
+              if (!element.data.hasOwnProperty(mandatoryProps[index])) {
+                missingMandatoryProps.error = true;
+                missingMandatoryProps.props.push(mandatoryProps[index]);
               }
             }
           }
-
-          if (productEventname !== "") finalEvents.push({ "name": productEventname, "data": mapProperties(ecommerceDatalayer.items[index], itemPropsMapping, constantProps) });
-        }
-      }
-      // automatically calculate "cart_quantity" property
-      if (totalQuantity > 0) ecomPropsWithoutItems.cart_quantity = totalQuantity;
-
-      if (!isAutoItemsEvent) {
-        finalEvents.push({ "name": mappedEventname, "data": mapProperties(ecomPropsWithoutItems, ecomPropsMapping, constantProps) });
-      }
-
-      for (let index = finalEvents.length - 1; index >= 0; index--) {
-        const element = finalEvents[index];
-
-        // automatically add "cart_id" property if none defined
-        if (!element.data.cart_id && ecommerceDatalayer.transaction_id) {
-          element.data.cart_id = ecommerceDatalayer.transaction_id;
-        }
-        // automatically add "transaction_id" property if none defined
-        if (!element.data.transaction_id && ecommerceDatalayer.transaction_id) {
-          element.data.transaction_id = ecommerceDatalayer.transaction_id;
-        }
-        // automatically add "onsitead_type" property if none defined
-        if (!element.data.onsitead_type) {
-          if(checkVarPrefix(element.name, ['publisher'], '.')) { element.data.onsitead_type = 'Publisher'; }
-          if(checkVarPrefix(element.name, ['self_promotion'], '.')) { element.data.onsitead_type = 'Self promotion'; }
-        }
-
-        let missingMandatoryProps = { error: false, props: [] };
-        const mandatoryProps = ECOMMERCE_MANDATORY_PROPERTIES[element.name] || false;
-        if (mandatoryProps) {
-          for (let index = 0; index < mandatoryProps.length; index++) {
-            if (!element.data.hasOwnProperty(mandatoryProps[index])) {
-              missingMandatoryProps.error = true;
-              missingMandatoryProps.props.push(mandatoryProps[index]);
-            }
+          if (missingMandatoryProps.error) {
+            finalEvents.splice(index, 1);
+            log('GTM Piano Analytics Tag Template - Event "' + element.name + '" aborted, mandatory parameter missing: ', missingMandatoryProps.props);
           }
         }
-        if (missingMandatoryProps.error) {
-          finalEvents.splice(index, 1);
-          log('GTM Piano Analytics Tag Template - Event "' + element.name + '" aborted, mandatory parameter missing: ', missingMandatoryProps.props);
-        }
-      }
 
-      log('GTM Piano Analytics Tag Template - eCommerce bridge');
-      if (JSON.stringify(finalEvents !== '[]')) dataLayerPush(['sendEvents', finalEvents]);
+        log('GTM Piano Analytics Tag Template - eCommerce bridge');
+        if (JSON.stringify(finalEvents) !== '[]') dataLayerPush(['sendEvents', finalEvents]);
+      } catch (e) {
+        log('GTM Piano Analytics Tag Template - eCommerce bridge error - ', e);
+        data.gtmOnFailure();
+        return;
+      }
     }
 
     data.gtmOnSuccess();
@@ -818,11 +836,6 @@ function mapProperties(input, mapping, constantProps) {
       output[mapping[key]] = outputValue;
       Object.delete(output, key);
     }
-    if (JSON.stringify(constantProps) !== '{}') {
-      Object.keys(constantProps).forEach(function (key) {
-        output[key] = constantProps[key];
-      });
-    }
   });
   Object.keys(mapping).forEach(function (key) {
     if (key.indexOf("+") !== -1) {
@@ -855,6 +868,13 @@ function mapProperties(input, mapping, constantProps) {
       }
     }
   });
+  if (JSON.stringify(constantProps) !== '{}') {
+    Object.keys(constantProps).forEach(function (key) {
+      if (!output.hasOwnProperty(key)) {
+        output[key] = constantProps[key];
+      }
+    });
+  }
   return output;
 }
 
@@ -917,6 +937,23 @@ const ECOMMERCE_MANDATORY_PROPERTIES = {
   "product.purchased": ["cart_id", "product_id", "transaction_id"],
 };
 
+function unwrapDataLayerItem(o) {
+  // If falsy (due to e.g. sandbox API suppressing the object), return empty object
+  if (!o) return {};
+
+  // If a regular dataLayer object, return it
+  if (o['gtm.uniqueEventId']) return o;
+
+  // Otherwise assume it's a template constructor-based object
+  // Clone the object to remove constructor, then return first
+  // property in the object (the wrapper)
+  o = JSON.parse(JSON.stringify(o));
+  for (let prop in o) {
+    return o[prop];
+  }
+  return {};
+}
+
 // Use https://github.com/gtm-templates-simo-ahava/data-layer-picker to retrieve actually pushed DL values
 function retrieveActualPush(type, value) {
   const gtmId = data.gtmEventId;
@@ -936,22 +973,8 @@ function retrieveActualPush(type, value) {
 
   if (dataLayer && gtmId) {
     // Get object from dataLayer that matches the gtm.uniqueEventId
-    let obj = dataLayer.map(o => {
-      // If falsy (due to e.g. sandbox API suppressing the object), return empty object
-      if (!o) return {};
-
-      // If a regular dataLayer object, return it
-      if (o['gtm.uniqueEventId']) return o;
-
-      // Otherwise assume it's a template constructor-based object
-      // Clone the object to remove constructor, then return first
-      // property in the object (the wrapper)
-      o = JSON.parse(JSON.stringify(o));
-      for (let prop in o) {
-        return o[prop];
-      }
-      // Filter to only include the item(s) where the event ID matches
-    }).filter(o => !!o && o['gtm.uniqueEventId'] === gtmId);
+    let obj = dataLayer.map(unwrapDataLayerItem)
+      .filter(o => !!o && String(o['gtm.uniqueEventId']) === String(gtmId));
 
     // Get the first item from the matches
     obj = obj.length ? obj[0] : {};
@@ -960,6 +983,46 @@ function retrieveActualPush(type, value) {
         return obj;
       case 'key':
         return get(obj, dataValue, obj[dataValue]);
+    }
+  }
+}
+
+function retrieveEcommerceDatalayer() {
+  const currentPush = retrieveActualPush('object') || {};
+  if (currentPush.hasOwnProperty('ecommerce')) {
+    if (currentPush.ecommerce && getType(currentPush.ecommerce) === 'object') {
+      return currentPush.ecommerce;
+    }
+    // ecommerce present but cleared/invalid on the current push: do not reuse a previous cart
+    return;
+  }
+
+  const gtmId = data.gtmEventId;
+  const eventName = data.ecomEventName;
+  const dataLayer = copyFromWindow('dataLayer');
+  if (!dataLayer || !gtmId) return;
+
+  let currentIndex = -1;
+  for (let i = dataLayer.length - 1; i >= 0; i--) {
+    const item = unwrapDataLayerItem(dataLayer[i]);
+    if (item && String(item['gtm.uniqueEventId']) === String(gtmId)) {
+      currentIndex = i;
+      break;
+    }
+  }
+  if (currentIndex < 0) return;
+
+  for (let i = currentIndex - 1; i >= 0; i--) {
+    const item = unwrapDataLayerItem(dataLayer[i]);
+    if (!item) continue;
+    if (item.hasOwnProperty('ecommerce') && item.ecommerce === null) {
+      break;
+    }
+    if (item.ecommerce && getType(item.ecommerce) === 'object') {
+      if (!eventName || item.event === eventName) {
+        log('GTM Piano Analytics Tag Template - eCommerce object retrieved from previous dataLayer push');
+        return item.ecommerce;
+      }
     }
   }
 }
@@ -996,7 +1059,6 @@ function propPrefix(key, type) {
   if (prefix[type]) return prefix[type] + '' + key;
   return key;
 }
-
 
 ___WEB_PERMISSIONS___
 
