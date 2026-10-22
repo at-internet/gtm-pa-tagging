@@ -1,6 +1,11 @@
 homepage: "https://www.piano.io"
 documentation: "https://developers.piano.io/analytics/"
 versions:
+  - sha: 2a486a7ab366b03b18877ff196d27fb41a0ed919
+    changeNotes: |2
+      Fix ecommerce bridge cart_id without transaction_id
+      Recover ecommerce object from previous same-event dataLayer push (SPA)
+      Fix empty sendEvents parenthesis and avoid Still running on bridge errors
   - sha: 2787e50e0ab68f9e81baee5a2df4568a2d6bd46c
     changeNotes: |2
       Skip SDK injection when the SDK source is outside https://tag.aticdn.net/
