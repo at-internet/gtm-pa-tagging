@@ -43,6 +43,65 @@ Object.delete(_pac, "pdlObject");
 setInWindow('_pac', _pac, true);
 if (JSON.stringify(windowPdl) !== '{}') setInWindow('pdl', windowPdl, true);
 
+const DEFAULT_ECOMMERCE_EVENTS_MAPPING = {
+  "view_item_list": "product.display",
+  "view_item": "product.page_display",
+  "add_to_cart": "product.add_to_cart",
+  "remove_from_cart": "product.remove_from_cart",
+  "view_cart": "cart.display",
+  "add_shipping_info": "cart.delivery",
+  "add_payment_info": "cart.payment",
+  "purchase": "transaction.confirmation",
+  "view_promotion": "publisher.impression",
+  "select_promotion": "publisher.click",
+};
+
+const DEFAULT_ECOMMERCE_PRODUCTS_MAPPING = {
+  "transaction.confirmation": "product.purchased",
+  "cart.display": "product.display",
+  "publisher.impression": "publisher.impression",
+  "publisher.click": "publisher.click",
+};
+
+const DEFAULT_ECOMMERCE_PROPS_MAPPING = {
+  "transaction_id": "transaction_id",
+  "value": "cart_turnovertaxincluded",
+  "value--tax": "cart_turnovertaxfree",
+  "shipping": "shipping_costtaxincluded",
+  "currency||items.currency": "cart_currency",
+  "coupon": "transaction_promocode",
+  "creative_name": "onsitead_variant",
+  "creative_slot": "onsitead_category",
+  "promotion_id": "onsitead_campaign",
+  "promotion_name": "onsitead_creation",
+  "items.item_id": "product_id",
+  "items.item_name": "product",
+  "items.coupon": "product_discount",
+  "items.discount": "product_discount",
+  "items.item_brand": "product_brand",
+  "items.item_category": "product_category1",
+  "items.item_category2": "product_category2",
+  "items.item_category3": "product_category3",
+  "items.item_category4": "product_category4",
+  "items.item_variant": "product_variant",
+  "items.price": "product_pricetaxfree",
+  "items.quantity": "product_quantity",
+};
+
+const ECOMMERCE_MANDATORY_PROPERTIES = {
+  "product.display": ["product_id"],
+  "product.page_display": ["product_id"],
+  "product.add_to_cart": ["product_id"],
+  "product.remove_from_cart": ["product_id"],
+  "cart.creation": ["cart_id"],
+  "cart.display": ["cart_id"],
+  "cart.update": ["cart_id"],
+  "cart.delivery": ["cart_id"],
+  "cart.payment": ["cart_id"],
+  "transaction.confirmation": ["cart_id", "transaction_id"],
+  "product.purchased": ["cart_id", "product_id", "transaction_id"],
+};
+
 const pixel = {
   init: () => {
     const dataLayerPush = createQueue(queueVarName);
@@ -364,65 +423,6 @@ function mapProperties(input, mapping, constantProps) {
   }
   return output;
 }
-
-const DEFAULT_ECOMMERCE_EVENTS_MAPPING = {
-  "view_item_list": "product.display",
-  "view_item": "product.page_display",
-  "add_to_cart": "product.add_to_cart",
-  "remove_from_cart": "product.remove_from_cart",
-  "view_cart": "cart.display",
-  "add_shipping_info": "cart.delivery",
-  "add_payment_info": "cart.payment",
-  "purchase": "transaction.confirmation",
-  "view_promotion": "publisher.impression",
-  "select_promotion": "publisher.click",
-};
-
-const DEFAULT_ECOMMERCE_PRODUCTS_MAPPING = {
-  "transaction.confirmation": "product.purchased",
-  "cart.display": "product.display",
-  "publisher.impression": "publisher.impression",
-  "publisher.click": "publisher.click",
-};
-
-const DEFAULT_ECOMMERCE_PROPS_MAPPING = {
-  "transaction_id": "transaction_id",
-  "value": "cart_turnovertaxincluded",
-  "value--tax": "cart_turnovertaxfree",
-  "shipping": "shipping_costtaxincluded",
-  "currency||items.currency": "cart_currency",
-  "coupon": "transaction_promocode",
-  "creative_name": "onsitead_variant",
-  "creative_slot": "onsitead_category",
-  "promotion_id": "onsitead_campaign",
-  "promotion_name": "onsitead_creation",
-  "items.item_id": "product_id",
-  "items.item_name": "product",
-  "items.coupon": "product_discount",
-  "items.discount": "product_discount",
-  "items.item_brand": "product_brand",
-  "items.item_category": "product_category1",
-  "items.item_category2": "product_category2",
-  "items.item_category3": "product_category3",
-  "items.item_category4": "product_category4",
-  "items.item_variant": "product_variant",
-  "items.price": "product_pricetaxfree",
-  "items.quantity": "product_quantity",
-};
-
-const ECOMMERCE_MANDATORY_PROPERTIES = {
-  "product.display": ["product_id"],
-  "product.page_display": ["product_id"],
-  "product.add_to_cart": ["product_id"],
-  "product.remove_from_cart": ["product_id"],
-  "cart.creation": ["cart_id"],
-  "cart.display": ["cart_id"],
-  "cart.update": ["cart_id"],
-  "cart.delivery": ["cart_id"],
-  "cart.payment": ["cart_id"],
-  "transaction.confirmation": ["cart_id", "transaction_id"],
-  "product.purchased": ["cart_id", "product_id", "transaction_id"],
-};
 
 function unwrapDataLayerItem(o) {
   // If falsy (due to e.g. sandbox API suppressing the object), return empty object
