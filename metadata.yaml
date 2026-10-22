@@ -1,6 +1,10 @@
 homepage: "https://www.piano.io"
 documentation: "https://developers.piano.io/analytics/"
 versions:
+  - sha: 2787e50e0ab68f9e81baee5a2df4568a2d6bd46c
+    changeNotes: |2
+      Skip SDK injection when the SDK source is outside https://tag.aticdn.net/
+      Allow loading a CDDC or self-hosted SDK from a Custom HTML tag
   - sha: 2caead9dd5dbb1442af950d92932877045b97ba0
     changeNotes: Manage consent v2
   - sha: 589c13c7eaea6cfad4faee9c50d29f888ee43368
