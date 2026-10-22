@@ -1454,6 +1454,744 @@ scenarios:
     assertThat(queueCalls[0].args[0]).isEqualTo('sendEvent');
     assertThat(queueCalls[0].args[1]).isEqualTo('page.display');
 
+- name: CDN sdkSrc injects piano-analytics.js then runs command
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    let injectSrc = '';
+    mock('injectScript', (src, onSuccess) => {
+      injectSrc = src;
+      onSuccess();
+    });
+
+    runCode({
+      commandChoice: 'sendEvent',
+      eventName: 'page.display',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(injectSrc).isEqualTo('https://tag.aticdn.net/piano-analytics.js');
+    assertThat(queueCalls.length).isEqualTo(1);
+    assertThat(queueCalls[0][0]).isEqualTo('sendEvent');
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: Missing sdkSrc defaults to CDN URL
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    mock('createQueue', () => () => {});
+
+    let injectSrc = '';
+    mock('injectScript', (src, onSuccess) => {
+      injectSrc = src;
+      onSuccess();
+    });
+
+    runCode({
+      commandChoice: 'sendEvent',
+      eventName: 'page.display',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456'
+      }
+    });
+
+    assertThat(injectSrc).isEqualTo('https://tag.aticdn.net/piano-analytics.js');
+
+- name: Denied inject_script permission calls gtmOnFailure
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => false);
+
+    let injectCalled = false;
+    mock('injectScript', () => { injectCalled = true; });
+
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'sendEvent',
+      eventName: 'page.display',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(injectCalled).isEqualTo(false);
+    assertThat(queueCalls.length).isEqualTo(0);
+    assertApi('gtmOnFailure').wasCalled();
+    assertApi('gtmOnSuccess').wasNotCalled();
+
+- name: setInWindow writes _pac without pdlObject and merges pdl defaults
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+
+    let written = {};
+    mock('setInWindow', (key, value) => { written[key] = value; });
+    mock('createQueue', () => () => {});
+    mock('injectScript', (src, onSuccess) => { onSuccess(); });
+
+    runCode({
+      commandChoice: 'sendEvent',
+      eventName: 'page.display',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js',
+        pdlObject: {
+          requireConsent: 'v2',
+          consent: { defaultPreset: { PA: 'opt-in' } }
+        }
+      }
+    });
+
+    assertThat(written._pac.pdlObject).isUndefined();
+    assertThat(written._pac.collectDomain).isEqualTo('https://analytics.piano.io');
+    assertThat(written.pdl.requireConsent).isEqualTo('v2');
+    assertThat(written.pdl.migration.browserId.source).isEqualTo('PA');
+    assertThat(written.pdl.cookies.storageMode).isEqualTo('fixed');
+
+- name: sendEvent without name succeeds without queue push
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'sendEvent',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(0);
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: sendEvents parses JSON props and skips rows without name
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'sendEvents',
+      multipleEventsTable: [
+        {multipleEventsName: 'page.display', multipleEventsProps: '{"page":"home"}'},
+        {multipleEventsProps: '{"page":"orphan"}'},
+        {multipleEventsName: 'click.navigation', multipleEventsProps: {click: 'nav'}}
+      ],
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(1);
+    assertThat(queueCalls[0][0]).isEqualTo('sendEvents');
+    assertThat(queueCalls[0][1]).isEqualTo([
+      {name: 'page.display', data: {page: 'home'}},
+      {name: 'click.navigation', data: {click: 'nav'}}
+    ]);
+
+- name: sendEvents with empty table does not push sendEvents
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'sendEvents',
+      multipleEventsTable: [
+        {multipleEventsProps: '{}'}
+      ],
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(0);
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: setUser forwards storeUser false and defaults omitted storeUser to true
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'setUser',
+      userId: 'u1',
+      userCategory: 'vip',
+      storeUser: false,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+    assertThat(queueCalls[0]).isEqualTo(['setUser', 'u1', 'vip', false]);
+
+    queueCalls = [];
+    runCode({
+      commandChoice: 'setUser',
+      userId: 'u2',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+    assertThat(queueCalls[0]).isEqualTo(['setUser', 'u2', '', true]);
+
+- name: setUser without id does not push
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'setUser',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(0);
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: setVisitorId pushes setVisitorId
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'setVisitorId',
+      visitorId: 'vid-1',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+
+    assertThat(queueCalls[0]).isEqualTo(['setVisitorId', 'vid-1']);
+
+- name: setProperties applies typed prefixes and options
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'setProperties',
+      setPropTable: [
+        {setPropKey: 'page', setPropValue: 'home', setPropType: 'string'},
+        {setPropKey: 'count', setPropValue: '3', setPropType: 'integer'},
+        {setPropKey: 'ok', setPropValue: 'true', setPropType: 'boolean'},
+        {setPropKey: 'day', setPropValue: '2024-01-01', setPropType: 'date'},
+        {setPropKey: 'tags', setPropValue: '["a","b"]', setPropType: 'array'},
+        {setPropKey: 'autoVal', setPropValue: 'raw', setPropType: 'auto'},
+        {setPropKey: 'skip', setPropValue: '', setPropType: 'string'},
+        {setPropValue: 'orphan', setPropType: 'string'}
+      ],
+      setPropPersistent: true,
+      setPropEvents: [
+        {setPropEvent: 'page.display'},
+        {setPropEvent: 'click.*'}
+      ],
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+
+    assertThat(queueCalls[0][0]).isEqualTo('setProperties');
+    assertThat(queueCalls[0][1]).isEqualTo({
+      's:page': 'home',
+      'n:count': 3,
+      'b:ok': true,
+      'd:day': '2024-01-01',
+      'a:tags': ['a', 'b'],
+      autoVal: 'raw'
+    });
+    assertThat(queueCalls[0][2]).isEqualTo({
+      persistent: true,
+      events: ['page.display', 'click.*']
+    });
+
+- name: setConsentMode uses setByPurpose when requireConsent is v2
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'setConsentMode',
+      consentPurpose: 'AD',
+      consentMode: 'essential',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js',
+        pdlObject: { requireConsent: 'v2' }
+      }
+    });
+
+    assertThat(queueCalls[0]).isEqualTo(['consent.setByPurpose', 'AD', 'essential']);
+
+- name: setConsentMode uses setMode without consent v2
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return { requireConsent: 'v1' };
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'setConsentMode',
+      consentMode: 'opt-out',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+
+    assertThat(queueCalls[0]).isEqualTo(['consent.setMode', 'opt-out']);
+
+- name: setPrivacyMode pushes privacy.setMode
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'setPrivacyMode',
+      privacyMode: 'optout',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js'
+      }
+    });
+
+    assertThat(queueCalls[0]).isEqualTo(['privacy.setMode', 'optout']);
+
+- name: queueVarName _paqueue is used by createQueue
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    let queueName = '';
+    mock('createQueue', (varName) => {
+      queueName = varName;
+      return () => {};
+    });
+
+    runCode({
+      commandChoice: 'sendEvent',
+      eventName: 'page.display',
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://nox.example.com/pa.js',
+        queueVarName: '_paqueue'
+      }
+    });
+
+    assertThat(queueName).isEqualTo('_paqueue');
+
+- name: eCommerce purchase maps products and cart with transaction_id as cart_id
+  code: |-
+    const purchase = {
+      transaction_id: 'T1',
+      value: 12,
+      tax: 2,
+      currency: 'EUR',
+      coupon: 'A,B',
+      items: [
+        {item_id: 'P1', item_name: 'Widget', price: 10, quantity: 2, item_brand: 'Acme', item_category: 'Cat1'}
+      ]
+    };
+
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [{
+          'gtm.uniqueEventId': 42,
+          event: 'purchase',
+          ecommerce: purchase
+        }];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'purchase',
+      gtmEventId: 42,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(1);
+    assertThat(queueCalls[0][0]).isEqualTo('sendEvents');
+    const events = queueCalls[0][1];
+    assertThat(events.length).isEqualTo(2);
+    assertThat(events[0].name).isEqualTo('product.purchased');
+    assertThat(events[0].data.product_id).isEqualTo('P1');
+    assertThat(events[0].data.product).isEqualTo('Widget');
+    assertThat(events[0].data.product_pricetaxfree).isEqualTo(10);
+    assertThat(events[0].data.product_quantity).isEqualTo(2);
+    assertThat(events[0].data.cart_id).isEqualTo('T1');
+    assertThat(events[0].data.transaction_id).isEqualTo('T1');
+    assertThat(events[1].name).isEqualTo('transaction.confirmation');
+    assertThat(events[1].data.cart_turnovertaxincluded).isEqualTo(12);
+    assertThat(events[1].data.cart_turnovertaxfree).isEqualTo(10);
+    assertThat(events[1].data.cart_currency).isEqualTo('EUR');
+    assertThat(events[1].data.transaction_promocode).isEqualTo(['A', 'B']);
+    assertThat(events[1].data.cart_quantity).isEqualTo(2);
+    assertThat(events[1].data.cart_nbdistinctproduct).isEqualTo(1);
+    assertThat(events[1].data.cart_id).isEqualTo('T1');
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: eCommerce add_to_cart keeps cart_id without transaction_id
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [{
+          'gtm.uniqueEventId': 7,
+          event: 'add_to_cart',
+          ecommerce: {
+            cart_id: 'CART-9',
+            items: [{item_id: 'P2', quantity: 1}]
+          }
+        }];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'add_to_cart',
+      gtmEventId: 7,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(queueCalls[0][0]).isEqualTo('sendEvents');
+    assertThat(queueCalls[0][1].length).isEqualTo(1);
+    assertThat(queueCalls[0][1][0].name).isEqualTo('product.add_to_cart');
+    assertThat(queueCalls[0][1][0].data.product_id).isEqualTo('P2');
+    assertThat(queueCalls[0][1][0].data.product_quantity).isEqualTo(1);
+    assertThat(queueCalls[0][1][0].data.cart_id).isEqualTo('CART-9');
+
+- name: eCommerce constant $$ mapping sets cart_id
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [{
+          'gtm.uniqueEventId': 8,
+          event: 'view_cart',
+          ecommerce: {
+            items: [{item_id: 'P3', quantity: 1}]
+          }
+        }];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'view_cart',
+      gtmEventId: 8,
+      ecomPropsMapping: [
+        {ecommercePropInput: '$$C-FIXED', ecommercePropOutput: 'cart_id'}
+      ],
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    const events = queueCalls[0][1];
+    assertThat(events[0].name).isEqualTo('product.display');
+    assertThat(events[0].data.cart_id).isEqualTo('C-FIXED');
+    assertThat(events[1].name).isEqualTo('cart.display');
+    assertThat(events[1].data.cart_id).isEqualTo('C-FIXED');
+
+- name: eCommerce SPA recovers ecommerce from previous same-event push
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [
+          {
+            'gtm.uniqueEventId': 10,
+            event: 'purchase',
+            ecommerce: {
+              transaction_id: 'T-SPA',
+              value: 5,
+              items: [{item_id: 'P-SPA', quantity: 1}]
+            }
+          },
+          {
+            'gtm.uniqueEventId': 11,
+            event: 'purchase'
+          }
+        ];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'purchase',
+      gtmEventId: 11,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(1);
+    assertThat(queueCalls[0][1][0].data.product_id).isEqualTo('P-SPA');
+    assertThat(queueCalls[0][1][0].data.cart_id).isEqualTo('T-SPA');
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: eCommerce null on current push fails without reusing previous cart
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [
+          {
+            'gtm.uniqueEventId': 20,
+            event: 'purchase',
+            ecommerce: {
+              transaction_id: 'OLD',
+              items: [{item_id: 'OLD'}]
+            }
+          },
+          {
+            'gtm.uniqueEventId': 21,
+            event: 'purchase',
+            ecommerce: null
+          }
+        ];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'purchase',
+      gtmEventId: 21,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(0);
+    assertApi('gtmOnFailure').wasCalled();
+    assertApi('gtmOnSuccess').wasNotCalled();
+
+- name: eCommerce unmapped event calls gtmOnFailure
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [{
+          'gtm.uniqueEventId': 30,
+          event: 'custom_event',
+          ecommerce: {items: [{item_id: 'P'}]}
+        }];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'custom_event',
+      gtmEventId: 30,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(0);
+    assertApi('gtmOnFailure').wasCalled();
+    assertApi('gtmOnSuccess').wasNotCalled();
+
+- name: eCommerce drops events missing mandatory properties but still succeeds
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [{
+          'gtm.uniqueEventId': 31,
+          event: 'view_item',
+          ecommerce: {
+            items: [{item_name: 'NoId'}]
+          }
+        }];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'view_item',
+      gtmEventId: 31,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(0);
+    assertApi('gtmOnSuccess').wasCalled();
+    assertApi('gtmOnFailure').wasNotCalled();
+
 
 ___NOTES___
 
