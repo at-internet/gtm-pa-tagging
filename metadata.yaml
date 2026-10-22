@@ -1,6 +1,10 @@
 homepage: "https://www.piano.io"
 documentation: "https://developers.piano.io/analytics/"
 versions:
+  - sha: 253f82294c19db0495054ef7b04a240ce99d0dbe
+    changeNotes: Fix ecommerce bridge when the SDK loads outside the CDN
+  - sha: 3b5471f121a79b60b1229b0b10aecb811f2669cd
+    changeNotes: Add template tests for tagging commands and the ecommerce bridge
   - sha: 2a486a7ab366b03b18877ff196d27fb41a0ed919
     changeNotes: |2
       Fix ecommerce bridge cart_id without transaction_id
