@@ -476,6 +476,14 @@ ___TEMPLATE_PARAMETERS___
           }
         ],
         "help": "Begin with $$ to assign a value instead of a DL property: $${var_name}"
+      },
+      {
+        "type": "CHECKBOX",
+        "name": "ecomBatchItems",
+        "checkboxText": "Batch similar product events (items_list)",
+        "simpleValueType": true,
+        "defaultValue": true,
+        "help": "Send similar product events as one event with an items_list array (up to 100 items). Piano Analytics splits them during processing. Uncheck to keep one event per product."
       }
     ],
     "enablingConditions": [
@@ -525,7 +533,7 @@ const makeInteger = require('makeInteger');
 const makeNumber = require('makeNumber');
 const makeString = require('makeString');
 
-const templateVersion = 'pat_26-10.001';
+const templateVersion = 'pat_26-11.001';
 
 log('GTM Piano Analytics Tag Template - Data =', data);
 
@@ -688,7 +696,6 @@ const pixel = {
     }
 
     if (commandChoice == "ecommerceMapping") {
-      try {
         let finalEvents = [];
         const customEventsMapping = data.ecomEventsMapping && makeTableMap(data.ecomEventsMapping, 'ecommerceEventInput', 'ecommerceEventOutput');
         const customProductsMapping = data.ecomEventsMapping && makeTableMap(data.ecomEventsMapping, 'ecommerceEventOutput', 'ecommerceProductEventsOutput');
@@ -812,13 +819,12 @@ const pixel = {
           }
         }
 
+        if (data.ecomBatchItems !== false) {
+          finalEvents = batchSimilarEvents(finalEvents);
+        }
+
         log('GTM Piano Analytics Tag Template - eCommerce bridge');
         if (JSON.stringify(finalEvents) !== '[]') dataLayerPush(['sendEvents', finalEvents]);
-      } catch (e) {
-        log('GTM Piano Analytics Tag Template - eCommerce bridge error - ', e);
-        data.gtmOnFailure();
-        return;
-      }
     }
 
     data.gtmOnSuccess();
@@ -845,6 +851,82 @@ function checkVarPrefix(val, prefixes, splitter) {
     if(prefixes[index] == valPrefix) return true;
   }
   return false;
+}
+
+const ITEMS_LIST_MAX = 100;
+
+function batchSimilarEvents(events) {
+  if (!events || events.length < 2) return events;
+
+  const groups = {};
+  const groupOrder = [];
+  const result = [];
+
+  for (let index = 0; index < events.length; index++) {
+    const event = events[index];
+    const eventName = event.name;
+    if (!groups[eventName]) {
+      groups[eventName] = [];
+      groupOrder.push(eventName);
+    }
+    groups[eventName].push(event);
+  }
+
+  for (let groupIndex = 0; groupIndex < groupOrder.length; groupIndex++) {
+    const eventName = groupOrder[groupIndex];
+    const groupEvents = groups[eventName];
+
+    if (groupEvents.length < 2) {
+      result.push(groupEvents[0]);
+      continue;
+    }
+
+    for (let chunkStart = 0; chunkStart < groupEvents.length; chunkStart += ITEMS_LIST_MAX) {
+      let chunkEnd = chunkStart + ITEMS_LIST_MAX;
+      if (chunkEnd > groupEvents.length) chunkEnd = groupEvents.length;
+      const chunk = [];
+      for (let i = chunkStart; i < chunkEnd; i++) {
+        chunk.push(groupEvents[i]);
+      }
+
+      if (chunk.length === 1) {
+        result.push(chunk[0]);
+        continue;
+      }
+
+      const sharedProps = {};
+      const firstData = chunk[0].data;
+      const keys = Object.keys(firstData);
+      for (let keyIndex = 0; keyIndex < keys.length; keyIndex++) {
+        const key = keys[keyIndex];
+        const firstValue = firstData[key];
+        let isShared = true;
+        for (let itemIndex = 1; itemIndex < chunk.length; itemIndex++) {
+          if (JSON.stringify(chunk[itemIndex].data[key]) !== JSON.stringify(firstValue)) {
+            isShared = false;
+            break;
+          }
+        }
+        if (isShared) sharedProps[key] = firstValue;
+      }
+
+      const itemsList = [];
+      for (let itemIndex = 0; itemIndex < chunk.length; itemIndex++) {
+        const itemData = JSON.parse(JSON.stringify(chunk[itemIndex].data));
+        const sharedKeys = Object.keys(sharedProps);
+        for (let sharedIndex = 0; sharedIndex < sharedKeys.length; sharedIndex++) {
+          Object.delete(itemData, sharedKeys[sharedIndex]);
+        }
+        itemsList.push(itemData);
+      }
+
+      const batchedData = JSON.parse(JSON.stringify(sharedProps));
+      batchedData.items_list = itemsList;
+      result.push({ "name": eventName, "data": batchedData });
+    }
+  }
+
+  return result;
 }
 
 function mapProperties(input, mapping, constantProps) {
@@ -974,7 +1056,7 @@ function retrieveActualPush(type, value) {
   if (dataLayer && gtmId) {
     // Get object from dataLayer that matches the gtm.uniqueEventId
     let obj = dataLayer.map(unwrapDataLayerItem)
-      .filter(o => !!o && String(o['gtm.uniqueEventId']) === String(gtmId));
+      .filter(o => !!o && makeString(o['gtm.uniqueEventId']) === makeString(gtmId));
 
     // Get the first item from the matches
     obj = obj.length ? obj[0] : {};
@@ -1005,7 +1087,7 @@ function retrieveEcommerceDatalayer() {
   let currentIndex = -1;
   for (let i = dataLayer.length - 1; i >= 0; i--) {
     const item = unwrapDataLayerItem(dataLayer[i]);
-    if (item && String(item['gtm.uniqueEventId']) === String(gtmId)) {
+    if (item && makeString(item['gtm.uniqueEventId']) === makeString(gtmId)) {
       currentIndex = i;
       break;
     }
@@ -1454,7 +1536,7 @@ scenarios:
     assertThat(queueCalls[0].args[0]).isEqualTo('sendEvent');
     assertThat(queueCalls[0].args[1]).isEqualTo('page.display');
 
-- name: CDN sdkSrc injects piano-analytics.js then runs command
+- name: CDN sdkSrc injects piano-analytics then runs command
   code: |-
     mock('copyFromWindow', (key) => {
       if (key === '_pac') return { privacy: [] };
@@ -1840,7 +1922,7 @@ scenarios:
 
     assertThat(queueCalls[0]).isEqualTo(['consent.setMode', 'opt-out']);
 
-- name: setPrivacyMode pushes privacy.setMode
+- name: setPrivacyMode pushes privacy setMode
   code: |-
     mock('copyFromWindow', (key) => {
       if (key === '_pac') return { privacy: [] };
@@ -2233,6 +2315,236 @@ scenarios:
     assertThat(queueCalls[0][1][0].data.cart_id).isEqualTo('CART-9');
     assertApi('gtmOnSuccess').wasCalled();
     assertApi('gtmOnFailure').wasNotCalled();
+
+- name: eCommerce view_item_list batches into items_list by default
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [{
+          'gtm.uniqueEventId': 50,
+          event: 'view_item_list',
+          ecommerce: {
+            items: [
+              {item_id: 'P1', item_name: 'A', item_brand: 'Acme'},
+              {item_id: 'P2', item_name: 'B', item_brand: 'Acme'}
+            ]
+          }
+        }];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'view_item_list',
+      gtmEventId: 50,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    assertThat(queueCalls.length).isEqualTo(1);
+    assertThat(queueCalls[0][0]).isEqualTo('sendEvents');
+    const events = queueCalls[0][1];
+    assertThat(events.length).isEqualTo(1);
+    assertThat(events[0].name).isEqualTo('product.display');
+    assertThat(events[0].data.product_brand).isEqualTo('Acme');
+    assertThat(events[0].data.items_list.length).isEqualTo(2);
+    assertThat(events[0].data.items_list[0].product_id).isEqualTo('P1');
+    assertThat(events[0].data.items_list[0].product).isEqualTo('A');
+    assertThat(events[0].data.items_list[1].product_id).isEqualTo('P2');
+    assertThat(events[0].data.items_list[1].product).isEqualTo('B');
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: eCommerce view_item_list keeps one event per product when batching is disabled
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [{
+          'gtm.uniqueEventId': 51,
+          event: 'view_item_list',
+          ecommerce: {
+            items: [
+              {item_id: 'P1', item_name: 'A'},
+              {item_id: 'P2', item_name: 'B'}
+            ]
+          }
+        }];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'view_item_list',
+      ecomBatchItems: false,
+      gtmEventId: 51,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    const events = queueCalls[0][1];
+    assertThat(events.length).isEqualTo(2);
+    assertThat(events[0].name).isEqualTo('product.display');
+    assertThat(events[0].data.product_id).isEqualTo('P1');
+    assertThat(events[1].data.product_id).isEqualTo('P2');
+    assertThat(events[0].data.items_list).isUndefined();
+
+- name: eCommerce purchase batches products and keeps transaction parent flat
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [{
+          'gtm.uniqueEventId': 52,
+          event: 'purchase',
+          ecommerce: {
+            transaction_id: 'T2',
+            value: 30,
+            tax: 5,
+            currency: 'EUR',
+            items: [
+              {item_id: 'P1', item_name: 'A', price: 10, quantity: 1},
+              {item_id: 'P2', item_name: 'B', price: 15, quantity: 2}
+            ]
+          }
+        }];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'purchase',
+      gtmEventId: 52,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    const events = queueCalls[0][1];
+    assertThat(events.length).isEqualTo(2);
+    assertThat(events[0].name).isEqualTo('product.purchased');
+    assertThat(events[0].data.cart_id).isEqualTo('T2');
+    assertThat(events[0].data.transaction_id).isEqualTo('T2');
+    assertThat(events[0].data.items_list.length).isEqualTo(2);
+    assertThat(events[0].data.items_list[0].product_id).isEqualTo('P1');
+    assertThat(events[0].data.items_list[1].product_id).isEqualTo('P2');
+    assertThat(events[1].name).isEqualTo('transaction.confirmation');
+    assertThat(events[1].data.cart_turnovertaxincluded).isEqualTo(30);
+    assertThat(events[1].data.cart_turnovertaxfree).isEqualTo(25);
+    assertThat(events[1].data.cart_quantity).isEqualTo(3);
+    assertThat(events[1].data.cart_nbdistinctproduct).isEqualTo(2);
+    assertThat(events[1].data.cart_id).isEqualTo('T2');
+    assertThat(events[1].data.items_list).isUndefined();
+    assertApi('gtmOnSuccess').wasCalled();
+
+- name: eCommerce single item stays flat when batching is enabled
+  code: |-
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [{
+          'gtm.uniqueEventId': 53,
+          event: 'view_item',
+          ecommerce: {
+            items: [{item_id: 'ONLY', item_name: 'Solo'}]
+          }
+        }];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'view_item',
+      gtmEventId: 53,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    const events = queueCalls[0][1];
+    assertThat(events.length).isEqualTo(1);
+    assertThat(events[0].name).isEqualTo('product.page_display');
+    assertThat(events[0].data.product_id).isEqualTo('ONLY');
+    assertThat(events[0].data.product).isEqualTo('Solo');
+    assertThat(events[0].data.items_list).isUndefined();
+
+- name: eCommerce batches more than 100 items into chunks
+  code: |-
+    const items = [];
+    for (let i = 1; i <= 101; i++) {
+      items.push({item_id: 'P' + i, item_name: 'N' + i});
+    }
+    mock('copyFromWindow', (key) => {
+      if (key === '_pac') return { privacy: [] };
+      if (key === 'pdl') return {};
+      if (key === 'dataLayer') {
+        return [{
+          'gtm.uniqueEventId': 54,
+          event: 'view_item_list',
+          ecommerce: { items: items }
+        }];
+      }
+      return undefined;
+    });
+    mock('setInWindow', () => {});
+    mock('queryPermission', () => true);
+    let queueCalls = [];
+    mock('createQueue', () => (args) => { queueCalls.push(args); });
+
+    runCode({
+      commandChoice: 'ecommerceMapping',
+      ecomEventName: 'view_item_list',
+      gtmEventId: 54,
+      configuration: {
+        collectDomain: 'https://analytics.piano.io',
+        site: '123456',
+        sdkSrc: 'https://tag.aticdn.net/piano-analytics.js'
+      }
+    });
+
+    const events = queueCalls[0][1];
+    assertThat(events.length).isEqualTo(2);
+    assertThat(events[0].name).isEqualTo('product.display');
+    assertThat(events[0].data.items_list.length).isEqualTo(100);
+    assertThat(events[0].data.items_list[0].product_id).isEqualTo('P1');
+    assertThat(events[0].data.items_list[99].product_id).isEqualTo('P100');
+    assertThat(events[1].name).isEqualTo('product.display');
+    assertThat(events[1].data.product_id).isEqualTo('P101');
+    assertThat(events[1].data.items_list).isUndefined();
 
 
 ___NOTES___

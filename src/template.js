@@ -12,7 +12,7 @@ const makeInteger = require('makeInteger');
 const makeNumber = require('makeNumber');
 const makeString = require('makeString');
 
-const templateVersion = 'pat_26-10.001';
+const templateVersion = 'pat_26-11.001';
 
 log('GTM Piano Analytics Tag Template - Data =', data);
 
@@ -175,7 +175,6 @@ const pixel = {
     }
 
     if (commandChoice == "ecommerceMapping") {
-      try {
         let finalEvents = [];
         const customEventsMapping = data.ecomEventsMapping && makeTableMap(data.ecomEventsMapping, 'ecommerceEventInput', 'ecommerceEventOutput');
         const customProductsMapping = data.ecomEventsMapping && makeTableMap(data.ecomEventsMapping, 'ecommerceEventOutput', 'ecommerceProductEventsOutput');
@@ -299,13 +298,12 @@ const pixel = {
           }
         }
 
+        if (data.ecomBatchItems !== false) {
+          finalEvents = batchSimilarEvents(finalEvents);
+        }
+
         log('GTM Piano Analytics Tag Template - eCommerce bridge');
         if (JSON.stringify(finalEvents) !== '[]') dataLayerPush(['sendEvents', finalEvents]);
-      } catch (e) {
-        log('GTM Piano Analytics Tag Template - eCommerce bridge error - ', e);
-        data.gtmOnFailure();
-        return;
-      }
     }
 
     data.gtmOnSuccess();
@@ -332,6 +330,82 @@ function checkVarPrefix(val, prefixes, splitter) {
     if(prefixes[index] == valPrefix) return true;
   }
   return false;
+}
+
+const ITEMS_LIST_MAX = 100;
+
+function batchSimilarEvents(events) {
+  if (!events || events.length < 2) return events;
+
+  const groups = {};
+  const groupOrder = [];
+  const result = [];
+
+  for (let index = 0; index < events.length; index++) {
+    const event = events[index];
+    const eventName = event.name;
+    if (!groups[eventName]) {
+      groups[eventName] = [];
+      groupOrder.push(eventName);
+    }
+    groups[eventName].push(event);
+  }
+
+  for (let groupIndex = 0; groupIndex < groupOrder.length; groupIndex++) {
+    const eventName = groupOrder[groupIndex];
+    const groupEvents = groups[eventName];
+
+    if (groupEvents.length < 2) {
+      result.push(groupEvents[0]);
+      continue;
+    }
+
+    for (let chunkStart = 0; chunkStart < groupEvents.length; chunkStart += ITEMS_LIST_MAX) {
+      let chunkEnd = chunkStart + ITEMS_LIST_MAX;
+      if (chunkEnd > groupEvents.length) chunkEnd = groupEvents.length;
+      const chunk = [];
+      for (let i = chunkStart; i < chunkEnd; i++) {
+        chunk.push(groupEvents[i]);
+      }
+
+      if (chunk.length === 1) {
+        result.push(chunk[0]);
+        continue;
+      }
+
+      const sharedProps = {};
+      const firstData = chunk[0].data;
+      const keys = Object.keys(firstData);
+      for (let keyIndex = 0; keyIndex < keys.length; keyIndex++) {
+        const key = keys[keyIndex];
+        const firstValue = firstData[key];
+        let isShared = true;
+        for (let itemIndex = 1; itemIndex < chunk.length; itemIndex++) {
+          if (JSON.stringify(chunk[itemIndex].data[key]) !== JSON.stringify(firstValue)) {
+            isShared = false;
+            break;
+          }
+        }
+        if (isShared) sharedProps[key] = firstValue;
+      }
+
+      const itemsList = [];
+      for (let itemIndex = 0; itemIndex < chunk.length; itemIndex++) {
+        const itemData = JSON.parse(JSON.stringify(chunk[itemIndex].data));
+        const sharedKeys = Object.keys(sharedProps);
+        for (let sharedIndex = 0; sharedIndex < sharedKeys.length; sharedIndex++) {
+          Object.delete(itemData, sharedKeys[sharedIndex]);
+        }
+        itemsList.push(itemData);
+      }
+
+      const batchedData = JSON.parse(JSON.stringify(sharedProps));
+      batchedData.items_list = itemsList;
+      result.push({ "name": eventName, "data": batchedData });
+    }
+  }
+
+  return result;
 }
 
 function mapProperties(input, mapping, constantProps) {
@@ -461,7 +535,7 @@ function retrieveActualPush(type, value) {
   if (dataLayer && gtmId) {
     // Get object from dataLayer that matches the gtm.uniqueEventId
     let obj = dataLayer.map(unwrapDataLayerItem)
-      .filter(o => !!o && String(o['gtm.uniqueEventId']) === String(gtmId));
+      .filter(o => !!o && makeString(o['gtm.uniqueEventId']) === makeString(gtmId));
 
     // Get the first item from the matches
     obj = obj.length ? obj[0] : {};
@@ -492,7 +566,7 @@ function retrieveEcommerceDatalayer() {
   let currentIndex = -1;
   for (let i = dataLayer.length - 1; i >= 0; i--) {
     const item = unwrapDataLayerItem(dataLayer[i]);
-    if (item && String(item['gtm.uniqueEventId']) === String(gtmId)) {
+    if (item && makeString(item['gtm.uniqueEventId']) === makeString(gtmId)) {
       currentIndex = i;
       break;
     }

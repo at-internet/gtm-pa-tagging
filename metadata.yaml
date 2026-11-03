@@ -1,6 +1,8 @@
 homepage: "https://www.piano.io"
 documentation: "https://developers.piano.io/analytics/"
 versions:
+  - sha: 19c6504bc53b9c92e74129b0f974b88b63081470
+    changeNotes: Batch similar ecommerce product events into items_list by default
   - sha: 253f82294c19db0495054ef7b04a240ce99d0dbe
     changeNotes: Fix ecommerce bridge when the SDK loads outside the CDN
   - sha: 3b5471f121a79b60b1229b0b10aecb811f2669cd
