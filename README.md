@@ -85,6 +85,14 @@ You can customize the properties mapping by adding new lines. Each line describe
 
 ![Custom ecommerce properties mapping](res/ecommerce-custom-props-mapping.png)
 
+##### Batch similar product events
+
+By default, the bridge batches similar product events into a single event using the `items_list` property ([documentation](https://developers.piano.io/analytics/data-collection/how-to-send-events/standard-events/#batching-similar-events)). Piano Analytics splits them during processing. Shared properties are set at the root of the event data; per-item properties stay in `items_list`. Parent events such as `transaction.confirmation` or `cart.display` remain separate flat events.
+
+You can send up to 100 items per batched event. The Collection API also has a 500 kB body size limit that may be reached first.
+
+A single product still produces one flat event. Uncheck **Batch similar product events** on the tag if you need the previous one-event-per-product payload.
+
 #### Set properties
 
 [Documentation](https://developers.piano.io/analytics/data-collection/how-to-send-events/send-events-via-sdks#add-properties-to-events)
